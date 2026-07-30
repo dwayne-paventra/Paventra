@@ -25,6 +25,7 @@ from components.kpi_cards import render_kpi_cards
 from components.network_map import render_network_map
 from components.executive import render_executive_dashboard
 from components.road_detail import render_road_detail
+from components.ai_panel import render_ai_panel
 
 # ------------------------------------------------
 # Page Configuration
@@ -201,52 +202,7 @@ condition = road["Condition"]
 traffic = road["Traffic"]
 treatment = road["Treatment"]
 
-st.subheader("🤖 AI Maintenance Advisor")
-risk = road["Risk Level"]
-condition = road["Condition"]
-traffic = road["Traffic"]
-
-if risk == "High":
-    recommendation = """
-🔴 **Priority: Critical**
-
-- Schedule immediate maintenance.
-- Perform a detailed pavement inspection.
-- Allocate repair funding as soon as possible.
-"""
-
-elif risk == "Medium":
-    recommendation = """
-🟡 **Priority: Moderate**
-
-- Monitor pavement condition.
-- Schedule preventative maintenance.
-- Inspect within the next 6 months.
-"""
-
-else:
-    recommendation = """
-🟢 **Priority: Low**
-
-- Continue routine inspections.
-- No immediate repairs required.
-- Reassess during the next maintenance cycle.
-"""
-
-st.info(recommendation)
-
-st.markdown("### 📊 AI Analysis")
-
-st.write(
-    f"""
-The selected road is **{condition}** with **{traffic}** traffic
-and has a **{risk}** risk rating.
-
-Based on these conditions, Paventra recommends the maintenance
-strategy shown above to maximize pavement life while minimizing
-future repair costs.
-"""
-)
+render_ai_panel(road)
 
 st.subheader("💰 Maintenance Cost Estimator")
 
