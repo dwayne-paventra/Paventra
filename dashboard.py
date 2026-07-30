@@ -23,7 +23,7 @@ from reportlab.lib.pagesizes import letter
 from helpers.sidebar import render_sidebar
 from components.kpi_cards import render_kpi_cards
 from components.network_map import render_network_map
-
+from components.executive import render_executive_dashboard
 
 # ------------------------------------------------
 # Page Configuration
