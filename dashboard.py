@@ -22,6 +22,9 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import letter
 from helpers.sidebar import render_sidebar
 from components.kpi_cards import render_kpi_cards
+from components.network_map import render_network_map
+
+
 # ------------------------------------------------
 # Page Configuration
 # ------------------------------------------------
@@ -423,27 +426,8 @@ if st.button("📄 Generate Executive Report"):
             mime="application/pdf"
         )
 
-st.subheader("🗺️ Michigan Road Network")
+render_network_map()
 
-st.info(
-    """
-    Interactive road map coming in the next sprint.
-
-    Future versions will include:
-
-    • Road segments
-
-    • AI failure predictions
-
-    • Maintenance recommendations
-
-    • Weather overlays
-
-    • Traffic data
-    """
-)
-
-st.markdown("---")
 st.subheader("🛣️ Road Asset Details")
 
 col1, col2, col3 = st.columns(3)
