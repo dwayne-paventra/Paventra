@@ -2,25 +2,26 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-
 import os
+from helpers.executive import render_executive_dashboard
 from styles import load_css
 from report import generate_report
 from charts import create_budget_chart, create_capital_chart
 from recommendations import get_recommendations
 from config import *
-from dashboard_helpers import calculate_dashboard_metrics
+from helpers.dashboard_helpers import calculate_dashboard_metrics
 import folium
 from streamlit_folium import st_folium
-from map_helpers import create_network_map
+from helpers.map_helpers import create_network_map
 from streamlit_option_menu import option_menu
 from utils import metric_card
 from predictor import calculate_risk
-from cost_helpers import calculate_project_budget
+from helpers.cost_helpers import calculate_project_budget
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import letter
-
+from helpers.sidebar import render_sidebar
+from components.kpi_cards import render_kpi_cards
 # ------------------------------------------------
 # Page Configuration
 # ------------------------------------------------
@@ -61,6 +62,7 @@ h1{
 # ------------------------------------------------
 # Load Data
 # ------------------------------------------------
+selected = render_sidebar()
 
 st.title("🛣 Paventra")
 
@@ -168,63 +170,15 @@ metrics = calculate_dashboard_metrics(roads)
 # Dashboard Metrics
 # ---------------------------------------------------------
 
-st.subheader("📊 Executive Network Health")
-
-col1, col2 = st.columns([1, 2])
-
-with col1:
-    st.metric(
-        "Network Health",
-        f"{metrics['network_health']:.1f}/100"
-    )
-
-    st.markdown(
-        f"### {metrics['health_status']}"
-    )
-
-with col2:
-    st.progress(metrics["network_health"] / 100)
-
-    st.write("Overall Pavement Network Condition")
-
-st.divider()
+render_executive_dashboard(metrics)
 
 # ------------------------------------------------
 # KPI Cards
 # ------------------------------------------------
 
 
-c1, c2, c3, c4 = st.columns(4)
+render_kpi_cards(metrics)
 
-with c1:
-    metric_card(
-        "🛣 Roads Analyzed",
-        f"{metrics['roads_total']:,}",
-        "#1565C0"
-    )
-
-with c2:
-    metric_card(
-        "⚠ Average Risk",
-        f"{metrics['avg_risk']:.1f}",
-        "#F9A825"
-    )
-
-with c3:
-    metric_card(
-        "🔴 High Risk Roads",
-        f"{metrics['high_risk']:,}",
-        "#D32F2F"
-    )
-
-with c4:
-    metric_card(
-        "🟢 Low Risk Roads",
-        f"{metrics['low_risk']:,}",
-        "#2E7D32"
-    )
-
-st.markdown("---")
 st.subheader("🗺️ Interactive Road Network")
 
 fig_map = create_network_map(roads)
