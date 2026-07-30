@@ -24,6 +24,7 @@ from helpers.sidebar import render_sidebar
 from components.kpi_cards import render_kpi_cards
 from components.network_map import render_network_map
 from components.executive import render_executive_dashboard
+from components.road_detail import render_road_detail
 
 # ------------------------------------------------
 # Page Configuration
@@ -192,37 +193,13 @@ st.plotly_chart(
 )
 
 st.markdown("---")
-st.subheader("🚧 Road Intelligence")
 
-selected_road = st.selectbox(
-    "Select a Road",
-    roads["Road Name"]
-)
+road = render_road_detail(roads)
 
-road = roads[roads["Road Name"] == selected_road].iloc[0]
-
-left, right = st.columns(2)
-
-with left:
-    st.metric("Risk Score", road["Risk Score"])
-    st.metric("Risk Level", road["Risk Level"])
-    st.metric("Condition", road["Condition"])
-
-with right:
-    st.metric("Traffic", road["Traffic"])
-    st.metric("Age", road["Age"])
+risk = road["Risk Level"]
+condition = road["Condition"]
+traffic = road["Traffic"]
 treatment = road["Treatment"]
-
-if (
-    pd.isna(treatment)
-    or str(treatment).lower() == "none"
-    or str(treatment).lower() == "nan"
-):
-    treatment = "Not Assigned"
-
-st.metric("Treatment", treatment)
-
-st.markdown("---")
 
 st.subheader("🤖 AI Maintenance Advisor")
 risk = road["Risk Level"]
