@@ -1,0 +1,9 @@
+Road ID,Road Name,Condition,Traffic,Age,Freeze_Thaw,Treatment,Risk Score,Latitude,Longitude,Road Length,Lanes,Surface Type,Speed Limit,ADT
+R001,Main St,Poor,High,25,High,Reconstruction,92,42.3314,-83.0458,2.8,4,Asphalt,45,24000
+R002,Oak Ave,Fair,Medium,15,Medium,Overlay,61,42.3350,-83.0500,1.6,2,Asphalt,35,12000
+R003,Pine Rd,Good,Low,5,Low,None,18,42.3385,-83.0425,3.2,2,Concrete,55,8500
+R004,Lake Dr,Poor,High,30,High,Reconstruction,96,42.3405,-83.0390,4.1,4,Concrete,45,28000
+R005,River Blvd,Fair,Medium,18,Medium,Crack Seal,52,42.3280,-83.0350,2.0,4,Asphalt,40,18000
+R006,County Rd 15,Good,Medium,7,Low,None,25,42.3255,-83.0485,5.4,2,Asphalt,55,6500
+R007,Elm St,Fair,Low,10,Medium,Overlay,41,42.3370,-83.0550,1.1,2,Asphalt,30,4000
+R008,M-66,Poor,Medium,18,High,Reconstruction,83,42.3330,-83.0580,6.8,4,Concrete,65,31000
