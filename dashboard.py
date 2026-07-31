@@ -30,6 +30,12 @@ from components.charts_panel import render_charts_panel
 from components.reports_panel import render_reports_panel
 from components.inventory_panel import render_inventory_panel
 from helpers.data_helpers import prepare_road_data
+import components.scenario_panel as scenario_panel
+import inspect
+
+print("Scenario panel module:", inspect.getfile(scenario_panel))
+
+render_scenario_panel = scenario_panel.render_scenario_panel
 
 # ------------------------------------------------
 # Page Configuration
@@ -182,6 +188,8 @@ render_kpi_cards(metrics)
 st.subheader("🗺️ Interactive Road Network")
 
 render_network_map(roads)
+
+render_scenario_panel(roads)
 
 st.markdown("---")
 
