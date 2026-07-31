@@ -8,6 +8,9 @@ print("=" * 40)
 # Load road data
 roads = pd.read_csv("data/roads.csv")
 
+st.write("Road Data Columns:")
+st.write(roads.columns.tolist())
+
 # Calculate a risk score for each road
 roads["Risk Score"] = roads.apply(
     lambda row: calculate_risk(

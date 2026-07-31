@@ -1,25 +1,33 @@
+"""
+Network Map component.
+"""
+
+from __future__ import annotations
+
 import streamlit as st
+from streamlit_folium import st_folium
+
+from helpers.map_helpers import create_network_map
 
 
-def render_network_map():
+def render_network_map(roads):
     """
-    Render the Network Map section.
+    Render the interactive Michigan road network.
     """
 
     st.subheader("🗺️ Michigan Road Network")
 
-    st.info(
-        """
-Interactive road map coming in the next sprint.
-
-Future versions will include:
-
-• Road segments
-• AI failure predictions
-• Maintenance recommendations
-• Weather overlays
-• Traffic data
-"""
+    st.caption(
+        "Explore the transportation network by interacting with the map."
     )
 
-    st.markdown("---")
+    road_map = create_network_map(roads)
+
+    st_folium(
+        road_map,
+        width=None,
+        height=700,
+        returned_objects=[],
+    )
+
+    st.divider()

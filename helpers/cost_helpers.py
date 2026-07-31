@@ -1,68 +1,121 @@
+"""
+Cost helper functions for Paventra.
+"""
+
+from __future__ import annotations
+
 import pandas as pd
+import plotly.express as px
 
 
-def calculate_project_budget(risk_level):
+_COST_PER_LANE_MILE = {
+    "Crack Seal": 18_000,
+    "Overlay": 180_000,
+    "Reconstruction": 950_000,
+    "Not Assigned": 0,
+    "None": 0,
+}
 
-    if risk_level == "High":
 
-        materials = 42000
-        labor = 21000
-        equipment = 15000
-        traffic_control = 8500
-        engineering = 6000
+def calculate_lane_miles(road: pd.Series) -> float:
+    """Calculate lane miles."""
 
-    elif risk_level == "Medium":
+    return float(road["Road Length"]) * float(road["Lanes"])
 
-        materials = 26000
-        labor = 14000
-        equipment = 9000
-        traffic_control = 5000
-        engineering = 3500
 
-    else:
+def calculate_project_cost(
+    road: pd.Series,
+) -> tuple[float, float]:
+    """
+    Calculate estimated project cost.
 
-        materials = 12000
-        labor = 7000
-        equipment = 3500
-        traffic_control = 1800
-        engineering = 1500
+    Returns
+    -------
+    tuple
+        (lane_miles, estimated_cost)
+    """
 
-    subtotal = (
-        materials
-        + labor
-        + equipment
-        + traffic_control
-        + engineering
+    lane_miles = calculate_lane_miles(road)
+
+    treatment = str(road["Treatment"])
+
+    estimated_cost = (
+        lane_miles
+        * _COST_PER_LANE_MILE.get(treatment, 0)
     )
 
-    contingency = subtotal * 0.10
+    return lane_miles, estimated_cost
 
-    total = subtotal + contingency
 
-    budget_df = pd.DataFrame({
+def calculate_project_budget(
+    risk_level: str,
+) -> tuple[pd.DataFrame, float]:
+    """
+    Create a simple executive budget breakdown.
+    """
 
-        "Category": [
+    if risk_level == "High":
+        values = [0.50, 0.30, 0.20]
+    elif risk_level == "Medium":
+        values = [0.35, 0.40, 0.25]
+    else:
+        values = [0.20, 0.30, 0.50]
 
-            "Materials",
-            "Labor",
-            "Equipment",
-            "Traffic Control",
-            "Engineering",
-            "Contingency"
+    total = 1_000_000
 
-        ],
-
-        "Cost ($)": [
-
-            materials,
-            labor,
-            equipment,
-            traffic_control,
-            engineering,
-            contingency
-
-        ]
-
-    })
+    budget_df = pd.DataFrame(
+        {
+            "Category": [
+                "Preventive",
+                "Corrective",
+                "Emergency",
+            ],
+            "Cost ($)": [
+                total * values[0],
+                total * values[1],
+                total * values[2],
+            ],
+        }
+    )
 
     return budget_df, total
+
+
+def create_budget_chart(
+    budget_df: pd.DataFrame,
+):
+    """
+    Create executive budget chart.
+    """
+
+    fig = px.bar(
+        budget_df,
+        x="Category",
+        y="Cost ($)",
+        text="Cost ($)",
+        title="Budget Allocation",
+    )
+
+    fig.update_traces(texttemplate="$%{y:,.0f}")
+
+    return fig
+
+
+def create_capital_chart(
+    capital_df: pd.DataFrame,
+):
+    """
+    Create capital improvement chart.
+    """
+
+    fig = px.bar(
+        capital_df,
+        x="Fiscal Year",
+        y="Recommended Budget",
+        text="Recommended Budget",
+        title="Capital Improvement Plan",
+    )
+
+    fig.update_traces(texttemplate="$%{y:,.0f}")
+
+    return fig
