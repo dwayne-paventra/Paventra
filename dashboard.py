@@ -15,7 +15,10 @@ from streamlit_folium import st_folium
 from streamlit_option_menu import option_menu
 from utils import metric_card
 from predictor import calculate_risk
-from helpers.cost_helpers import calculate_project_budget
+from helpers.cost_helpers import (
+    calculate_project_budget,
+    estimate_road_cost,
+)
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import letter
@@ -170,6 +173,24 @@ roads["Risk Score"] = roads.apply(
 
 # Prepare derived fields
 roads = prepare_road_data(roads)
+
+roads["Estimated Cost"] = roads.apply(
+    lambda row: estimate_road_cost(
+        row["Treatment"],
+        row["Road Length"],
+        row["Lanes"],
+    ),
+    axis=1,
+)
+st.write(
+    roads[
+        [
+            "Road Name",
+            "Treatment",
+            "Estimated Cost"
+        ]
+    ]
+)
 
 metrics = calculate_dashboard_metrics(roads)
 

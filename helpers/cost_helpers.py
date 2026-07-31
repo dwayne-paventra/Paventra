@@ -80,6 +80,28 @@ def calculate_project_budget(
 
     return budget_df, total
 
+def estimate_road_cost(
+    treatment: str,
+    length: float,
+    lanes: int,
+) -> float:
+    """
+    Estimate the cost of repairing one road segment.
+    """
+
+    unit_cost = {
+        "Crack Seal": 50000,
+        "Overlay": 250000,
+        "Mill & Fill": 400000,
+        "Reconstruction": 1000000,
+    }
+
+    cost_per_lane_mile = unit_cost.get(
+        treatment,
+        250000,
+    )
+
+    return cost_per_lane_mile * length * lanes
 
 def create_budget_chart(
     budget_df: pd.DataFrame,
