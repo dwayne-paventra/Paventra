@@ -35,6 +35,7 @@ from components.inventory_panel import render_inventory_panel
 from helpers.data_helpers import prepare_road_data
 import components.scenario_panel as scenario_panel
 import inspect
+from components.optimizer_panel import render_optimizer_panel
 
 print("Scenario panel module:", inspect.getfile(scenario_panel))
 
@@ -211,6 +212,8 @@ st.subheader("🗺️ Interactive Road Network")
 render_network_map(roads)
 
 render_scenario_panel(roads)
+
+render_optimizer_panel(roads)
 
 st.markdown("---")
 
