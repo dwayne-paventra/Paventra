@@ -10,7 +10,10 @@ from streamlit_folium import st_folium
 from helpers.map_helpers import create_network_map
 
 
-def render_network_map(roads):
+def render_network_map(
+    roads,
+    selected_ids=None,
+):
     """
     Render the interactive Michigan road network.
     """
@@ -21,7 +24,10 @@ def render_network_map(roads):
         "Explore the transportation network by interacting with the map."
     )
 
-    road_map = create_network_map(roads)
+    road_map = create_network_map(
+        roads,
+        selected_ids,
+    )
 
     st_folium(
         road_map,

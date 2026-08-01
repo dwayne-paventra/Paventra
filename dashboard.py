@@ -1,43 +1,66 @@
-import streamlit as st
+# ------------------------------------------------
+# Standard Library
+# ------------------------------------------------
+
+# (None currently)
+
+# ------------------------------------------------
+# Third-Party Libraries
+# ------------------------------------------------
+
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import os
-from helpers.executive import render_executive_dashboard
-from styles import load_css
-from report import generate_report
+import streamlit as st
+
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate
+
+# ------------------------------------------------
+# Project Modules
+# ------------------------------------------------
+
 from charts import create_budget_chart, create_capital_chart
-from recommendations import get_recommendations
 from config import *
-from helpers.dashboard_helpers import calculate_dashboard_metrics
-import folium
-from streamlit_folium import st_folium
-from streamlit_option_menu import option_menu
-from utils import metric_card
 from predictor import calculate_risk
+from recommendations import get_recommendations
+from report import generate_report
+from styles import load_css
+from utils import metric_card
+
+# ------------------------------------------------
+# Helpers
+# ------------------------------------------------
+
 from helpers.cost_helpers import (
     calculate_project_budget,
     estimate_road_cost,
 )
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib.pagesizes import letter
+from helpers.dashboard_helpers import calculate_dashboard_metrics
+from helpers.data_helpers import prepare_road_data
+from helpers.optimizer_helpers import optimize_budget
 from helpers.sidebar import render_sidebar
-from components.kpi_cards import render_kpi_cards
-from components.network_map import render_network_map
-from components.executive import render_executive_dashboard
-from components.road_detail import render_road_detail
+
+# ------------------------------------------------
+# Components
+# ------------------------------------------------
+
 from components.ai_panel import render_ai_panel
+from components.ai_summary import render_ai_summary
+from components.analytics_dashboard import render_analytics_dashboard
 from components.budget_panel import render_budget_panel
 from components.charts_panel import render_charts_panel
-from components.reports_panel import render_reports_panel
+from components.dashboard_metrics import render_dashboard_metrics
+from components.executive import render_executive_dashboard
 from components.inventory_panel import render_inventory_panel
-from helpers.data_helpers import prepare_road_data
-import components.scenario_panel as scenario_panel
-import inspect
+from components.kpi_cards import render_kpi_cards
+from components.network_map import render_network_map
 from components.optimizer_panel import render_optimizer_panel
+from components.recommended_roads import render_recommended_roads
+from components.reports_panel import render_reports_panel
+from components.road_detail import render_road_detail
 
-print("Scenario panel module:", inspect.getfile(scenario_panel))
+import components.scenario_panel as scenario_panel
+
 
 render_scenario_panel = scenario_panel.render_scenario_panel
 
@@ -83,17 +106,21 @@ h1{
 # ------------------------------------------------
 selected = render_sidebar()
 
-st.title("🛣 Paventra")
+st.title("🚧 Paventra")
+
+st.caption(
+    "AI-Powered Transportation Asset Management Platform"
+)
 
 st.markdown(
     """
-### AI-Powered Pavement Asset Intelligence
-
-Helping transportation agencies prioritize maintenance using predictive analytics, AI, and capital planning.
-
----
-"""
+Analyze roadway conditions, optimize maintenance budgets,
+prioritize infrastructure investments, and support transportation
+decision-making using artificial intelligence.
+    """
 )
+
+st.divider()
 
 col1, col2, col3 = st.columns(3)
 
@@ -183,15 +210,6 @@ roads["Estimated Cost"] = roads.apply(
     ),
     axis=1,
 )
-st.write(
-    roads[
-        [
-            "Road Name",
-            "Treatment",
-            "Estimated Cost"
-        ]
-    ]
-)
 
 metrics = calculate_dashboard_metrics(roads)
 
@@ -199,34 +217,110 @@ metrics = calculate_dashboard_metrics(roads)
 # Dashboard Metrics
 # ---------------------------------------------------------
 
+# ------------------------------------------------
+# Executive Dashboard
+# ------------------------------------------------
+
 render_executive_dashboard(metrics)
 
 # ------------------------------------------------
-# KPI Cards
+# Network Overview
 # ------------------------------------------------
 
 render_kpi_cards(metrics)
 
-st.subheader("🗺️ Interactive Road Network")
+budget, goal, strategy = render_optimizer_panel()
 
-render_network_map(roads)
+optimizer_results = optimize_budget(
+    roads,
+    budget,
+    goal,
+    strategy,
+)
 
-render_scenario_panel(roads)
+optimizer_results = optimize_budget(
+    roads,
+    budget,
+    goal,
+    strategy,
+)
 
-render_optimizer_panel(roads)
+render_dashboard_metrics(
+    roads,
+    optimizer_results,
+)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ------------------------------------------------
+# AI Recommendation
+# ------------------------------------------------
+
+render_ai_summary(
+    optimizer_results,
+)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ------------------------------------------------
+# Network Analytics
+# ------------------------------------------------
+
+render_analytics_dashboard(
+    roads,
+)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ------------------------------------------------
+# Budget Optimizer Results
+# ------------------------------------------------
+
+render_recommended_roads(
+    optimizer_results,
+)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# ------------------------------------------------
+# Interactive Road Network
+# ------------------------------------------------
+
+render_network_map(
+    roads,
+    optimizer_results["selected_ids"],
+)
+
+# ------------------------------------------------
+# Scenario Planning
+# ------------------------------------------------
+
+render_scenario_panel(
+    roads,
+)
 
 st.markdown("---")
 
-road = render_road_detail(roads)
+# ------------------------------------------------
+# Individual Road Analysis
+# ------------------------------------------------
+
+road = render_road_detail(
+    roads,
+)
 
 risk = road["Risk Level"]
 condition = road["Condition"]
 traffic = road["Traffic"]
 treatment = road["Treatment"]
 
-render_ai_panel(road)
+render_ai_panel(
+    road,
+)
 
-estimated_cost = render_budget_panel(road)
+estimated_cost = render_budget_panel(
+    road,
+)
 
 capital_df = render_charts_panel(
     roads,
@@ -240,4 +334,6 @@ render_reports_panel(
     capital_df,
 )
 
-render_inventory_panel(road)
+render_inventory_panel(
+    road,
+)

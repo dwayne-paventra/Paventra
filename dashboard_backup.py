@@ -23,6 +23,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import letter
 
+st.error("RUNNING dashboard.py")
+
 # ------------------------------------------------
 # Page Configuration
 # ------------------------------------------------
@@ -136,16 +138,7 @@ st_folium(m, width=1000, height=500)
 # Risk Level
 # ------------------------------------------------
 
-def risk_level(score):
 
-    if score >= 75:
-        return "High"
-
-    elif score >= 45:
-        return "Medium"
-
-    else:
-        return "Low"
 
 roads["Risk Level"] = roads["Risk Score"].apply(risk_level)
 
@@ -226,7 +219,7 @@ avg_risk = round(roads["Risk Score"].mean(),1)
 
 high_risk = len(roads[roads["Risk Level"]=="High"])
 
-low_risk = len(roads[roads["Risk Level"]=="Low"])
+metrics["low_risk"] = len(roads[roads["Risk Level"]=="Low"])
 
 c1,c2,c3,c4 = st.columns(4)
 
@@ -236,28 +229,12 @@ c2.metric("Average Risk", avg_risk)
 
 c3.metric("High Risk Roads", high_risk)
 
-c4.metric("Low Risk Roads", low_risk)
+c4.metric("Low Risk Roads", metrics["low_risk"])
 
 st.markdown("---")
 st.subheader("🗺️ Interactive Road Network")
 
-fig = px.scatter_map(
-    roads,
-    lat="Latitude",
-    lon="Longitude",
-    color="Risk Level",
-    hover_name="Road Name",
-    hover_data={
-        "Condition": True,
-        "Traffic": True,
-        "Age": True,
-        "Risk Score": True,
-        "Latitude": False,
-        "Longitude": False,
-    },
-    zoom=11,
-    height=600
-)
+
 
 st.plotly_chart(fig, use_container_width=True)
 
