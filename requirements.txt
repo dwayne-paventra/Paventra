@@ -1,0 +1,9 @@
+streamlit
+plotly
+pandas
+numpy
+folium
+streamlit-folium
+geopandas
+shapely
+reportlab
