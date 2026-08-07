@@ -97,12 +97,13 @@ def build_jackson_report(roads, results: dict) -> bytes:
     return stream.getvalue()
 
 
-def render_jackson_report(roads, results: dict) -> None:
+def render_jackson_report(report_bytes: bytes) -> None:
+    """Render a report that was explicitly requested and prepared by the dashboard."""
+
     import streamlit as st
 
     st.subheader("Executive report")
     st.caption("Download a concise briefing for discussion with city leadership.")
-    report_bytes = build_jackson_report(roads, results)
     st.download_button(
         "Download executive briefing (PDF)",
         data=report_bytes,

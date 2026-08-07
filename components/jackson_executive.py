@@ -7,7 +7,7 @@ import streamlit as st
 from pilot.jackson_config import PILOT_DISCLAIMER, PILOT_NAME
 
 
-def render_jackson_executive_overview(roads, results: dict) -> None:
+def render_jackson_executive_overview(roads, results: dict | None = None) -> None:
     """Render an executive briefing, intentionally free of engineering jargon."""
 
     average_pci = float(roads["PCI"].mean()) if not roads.empty else 0.0
@@ -16,7 +16,7 @@ def render_jackson_executive_overview(roads, results: dict) -> None:
         roads.loc[roads["Risk Level"] == "High", "Lane Miles"].sum()
     ) if not roads.empty else 0.0
     demonstration_need = float(roads["Estimated Cost"].sum()) if not roads.empty else 0.0
-    annual_investment = float(results["scenario"]["budget"])
+    annual_investment = float(results["scenario"]["budget"]) if results else 3_000_000.0
 
     st.title(PILOT_NAME)
     st.caption("A decision briefing for pavement investment planning")
@@ -35,11 +35,11 @@ def render_jackson_executive_overview(roads, results: dict) -> None:
     )
 
     values = [
-        ("Network Health", f"{max(0, 100 - results['network_risk_before']):.0f}/100"),
+        ("Network Health", f"{max(0, 100 - roads['Risk Score'].mean()):.0f}/100"),
         ("Average PCI", f"{average_pci:.0f}"),
         ("High-Risk Segments", f"{high_risk}"),
         ("Demo Investment Need", f"${demonstration_need:,.0f}"),
-        ("Treatable Lane Miles", f"{results['selected_lane_miles']:.1f}"),
+        ("Treatable Lane Miles", f"{results['selected_lane_miles']:.1f}" if results else "Select scenario"),
     ]
     for column, (label, value) in zip(st.columns(3), values[:3]):
         column.metric(label, value)
