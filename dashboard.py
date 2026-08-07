@@ -9,7 +9,7 @@ from report import generate_report
 from charts import create_budget_chart, create_capital_chart
 from recommendations import get_recommendations
 from config import *
-from dashboard_helpers import calculate_dashboard_metrics
+from helpers.dashboard_helpers import calculate_dashboard_metrics
 import folium
 from streamlit_folium import st_folium
 from map_helpers import create_network_map
