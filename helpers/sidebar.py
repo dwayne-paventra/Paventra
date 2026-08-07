@@ -11,8 +11,8 @@ def render_sidebar(pilot_mode=False, pilot_notice=None):
 
         st.image(logo, width=140)
 
-	if pilot_mode and pilot_notice:
-    		st.info(pilot_notice)
+        if pilot_mode and pilot_notice:
+            st.info(pilot_notice)
 
         st.markdown("## Paventra")
         st.caption("AI-Powered Road Intelligence")
@@ -37,4 +37,4 @@ def render_sidebar(pilot_mode=False, pilot_notice=None):
             orientation="vertical",
         )
 
-    return selected
+        return selected
