@@ -16,7 +16,7 @@ from helpers.map_helpers import create_network_map
 from streamlit_option_menu import option_menu
 from utils import metric_card
 from predictor import calculate_risk
-from cost_helpers import calculate_project_budget
+from helpers.cost_helpers import calculate_project_budget
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import letter
