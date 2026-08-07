@@ -12,7 +12,7 @@ from config import *
 from helpers.dashboard_helpers import calculate_dashboard_metrics
 import folium
 from streamlit_folium import st_folium
-from map_helpers import create_network_map
+from helpers.map_helpers import create_network_map
 from streamlit_option_menu import option_menu
 from utils import metric_card
 from predictor import calculate_risk
