@@ -3,13 +3,16 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 
 
-def render_sidebar():
+def render_sidebar(pilot_mode=False, pilot_notice=None):
 
     with st.sidebar:
 
         logo = Image.open("assets/logo.png")
 
         st.image(logo, width=140)
+
+	if pilot_mode and pilot_notice:
+    		st.info(pilot_notice)
 
         st.markdown("## Paventra")
         st.caption("AI-Powered Road Intelligence")
