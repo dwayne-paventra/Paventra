@@ -3,7 +3,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 
 
-def render_sidebar(pilot_mode: bool = False, pilot_notice: str | None = None):
+def render_sidebar():
 
     with st.sidebar:
 
@@ -12,34 +12,17 @@ def render_sidebar(pilot_mode: bool = False, pilot_notice: str | None = None):
         st.image(logo, width=140)
 
         st.markdown("## Paventra")
-        st.caption("Road investment decision support")
-
-        if pilot_mode:
-            st.caption("Jackson Municipal Pilot")
-            if pilot_notice:
-                st.markdown(
-                    f'<div class="pilot-notice pilot-notice-sidebar">{pilot_notice}</div>',
-                    unsafe_allow_html=True,
-                )
-            options = [
-                "Network Condition",
-                "Risk & Network Map",
-                "Investment Recommendations",
-                "Budget Scenario",
-                "Executive Report",
-            ]
-        else:
-            options = [
-                "Dashboard",
-                "Network Map",
-                "Investment Recommendations",
-                "Reports",
-                "Settings",
-            ]
+        st.caption("AI-Powered Road Intelligence")
 
         selected = option_menu(
             menu_title=None,
-            options=options,
+            options=[
+                "Dashboard",
+                "Network Map",
+                "AI Predictions",
+                "Reports",
+                "Settings",
+            ],
             icons=[
                 "speedometer2",
                 "geo-alt",
