@@ -7,3 +7,4 @@ streamlit-folium
 geopandas
 shapely
 reportlab
+streamlit-option-menu
