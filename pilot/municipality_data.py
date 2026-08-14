@@ -19,7 +19,7 @@ def _load_canonical_demo_inventory(config: MunicipalityConfig) -> pd.DataFrame:
 
     return load_streamlit_inventory(
         config.data_path,
-        municipality_name=config.name,
+        agency_name=config.short_name,
     )
 
 

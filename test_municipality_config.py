@@ -36,6 +36,8 @@ class MunicipalityConfigTests(unittest.TestCase):
         self.assertEqual(active.entity_type, "city")
         self.assertEqual(active.formal_name, "City of Jackson")
         self.assertEqual(active.short_name, "Jackson")
+        self.assertEqual(active.name, active.short_name)
+        self.assertEqual(active.display_name, active.formal_name)
         self.assertEqual(active.leadership_label, "municipal leadership")
         self.assertEqual(active.scenario_catalog_id, "standard")
         self.assertEqual(active.pilot_name, "Jackson Municipal Pilot")
@@ -97,7 +99,7 @@ class MunicipalityConfigTests(unittest.TestCase):
 
     def test_all_registered_municipalities_load_valid_inventories(self):
         required_columns = {
-            "Road ID", "Road Name", "County", "PCI", "Risk Score",
+            "Road ID", "Road Name", "Agency", "County", "PCI", "Risk Score",
             "Risk Level", "Estimated Cost", "Latitude", "Longitude",
         }
 
@@ -106,7 +108,8 @@ class MunicipalityConfigTests(unittest.TestCase):
                 roads = load_municipality_inventory(config)
                 self.assertGreater(len(roads), 0)
                 self.assertTrue(required_columns.issubset(roads.columns))
-                self.assertTrue(roads["County"].eq(config.name).all())
+                self.assertTrue(roads["Agency"].eq(config.short_name).all())
+                self.assertTrue(roads["County"].eq(roads["Agency"]).all())
                 self.assertTrue(roads["Road ID"].str.strip().ne("").all())
                 self.assertTrue(roads["Risk Score"].between(0, 100).all())
 

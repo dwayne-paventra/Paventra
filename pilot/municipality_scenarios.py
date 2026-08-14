@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+import math
+
 import pandas as pd
 
 from helpers.optimizer_helpers import optimize_budget
@@ -57,6 +60,62 @@ DEFAULT_SCENARIO_CATALOG_ID = "standard"
 
 # Phase 4 compatibility alias for callers expecting the original shared catalog.
 MUNICIPALITY_SCENARIOS = STANDARD_SCENARIOS
+
+
+def validate_scenario_catalogs(catalogs: Mapping[str, Mapping]) -> None:
+    """Validate scenario catalogs without invoking scenario calculations."""
+
+    if not isinstance(catalogs, Mapping) or not catalogs:
+        raise ValueError("Scenario catalogs must be a non-empty mapping.")
+
+    required_fields = ("budget", "goal", "strategy", "description")
+    for catalog_id, catalog in catalogs.items():
+        if not isinstance(catalog_id, str) or not catalog_id.strip():
+            raise ValueError("Scenario catalog ID must be a non-empty string.")
+        if not isinstance(catalog, Mapping) or not catalog:
+            raise ValueError(
+                f"Scenario catalog '{catalog_id}' must contain at least one scenario."
+            )
+
+        # Mapping keys are the scenario IDs, so duplicate IDs cannot survive
+        # construction. Validate each retained ID and definition explicitly.
+        for scenario_name, scenario in catalog.items():
+            if not isinstance(scenario_name, str) or not scenario_name.strip():
+                raise ValueError(
+                    f"Scenario catalog '{catalog_id}' has an empty scenario name."
+                )
+            if not isinstance(scenario, Mapping):
+                raise ValueError(
+                    f"Scenario '{scenario_name}' in catalog '{catalog_id}' must be a mapping."
+                )
+            missing = [field for field in required_fields if field not in scenario]
+            if missing:
+                raise ValueError(
+                    f"Scenario '{scenario_name}' in catalog '{catalog_id}' is missing "
+                    f"required fields: {', '.join(missing)}."
+                )
+
+            budget = scenario["budget"]
+            if (
+                isinstance(budget, bool)
+                or not isinstance(budget, (int, float))
+                or not math.isfinite(budget)
+                or budget <= 0
+            ):
+                raise ValueError(
+                    f"Scenario '{scenario_name}' in catalog '{catalog_id}' field "
+                    "'budget' must be a positive finite number."
+                )
+            for field_name in ("goal", "strategy", "description"):
+                value = scenario[field_name]
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(
+                        f"Scenario '{scenario_name}' in catalog '{catalog_id}' field "
+                        f"'{field_name}' must be a non-empty string."
+                    )
+
+
+validate_scenario_catalogs(SCENARIO_CATALOGS)
 
 
 def get_scenario_catalog(catalog_id: str) -> dict[str, dict]:

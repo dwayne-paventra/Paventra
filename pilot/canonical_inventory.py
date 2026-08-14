@@ -141,9 +141,17 @@ def load_canonical_inventory(path: str | Path) -> pd.DataFrame:
 
 def to_streamlit_inventory(
     roads: pd.DataFrame,
-    municipality_name: str,
+    municipality_name: str | None = None,
+    *,
+    agency_name: str | None = None,
 ) -> pd.DataFrame:
-    """Adapt enriched canonical roads to the existing Streamlit UI contract."""
+    """Adapt canonical roads to the UI contract with legacy identity aliases."""
+
+    if agency_name is not None and municipality_name is not None and agency_name != municipality_name:
+        raise ValueError("agency_name and municipality_name must match when both are provided.")
+    resolved_agency_name = agency_name or municipality_name
+    if not isinstance(resolved_agency_name, str) or not resolved_agency_name.strip():
+        raise ValueError("An agency_name is required for the Streamlit inventory.")
 
     inventory = roads.rename(columns=_UI_COLUMNS).copy()
     inventory["Condition"] = inventory["PCI"]
@@ -151,7 +159,9 @@ def to_streamlit_inventory(
     inventory["Risk Level"] = inventory["risk_level"]
     inventory["Risk Reason"] = inventory["risk_reason"]
     inventory["Speed Limit"] = 25
-    inventory["County"] = municipality_name
+    inventory["Agency"] = resolved_agency_name
+    # Compatibility alias retained for the legacy dashboard and county GIS modules.
+    inventory["County"] = inventory["Agency"]
     inventory["Lane Miles"] = inventory["Road Length"] * inventory["Lanes"]
     inventory["Estimated Cost"] = (
         inventory["Lane Miles"] * inventory["treatment_cost_per_lane_mile"]
@@ -161,11 +171,14 @@ def to_streamlit_inventory(
 
 def load_streamlit_inventory(
     path: str | Path,
-    municipality_name: str,
+    municipality_name: str | None = None,
+    *,
+    agency_name: str | None = None,
 ) -> pd.DataFrame:
     """Run the shared canonical-to-Streamlit inventory pipeline."""
 
     return to_streamlit_inventory(
         load_canonical_inventory(path),
         municipality_name=municipality_name,
+        agency_name=agency_name,
     )

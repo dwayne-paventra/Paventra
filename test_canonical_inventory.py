@@ -40,11 +40,12 @@ class CanonicalInventoryTests(unittest.TestCase):
         ):
             validate_canonical_schema(roads)
 
-    def test_shared_pipeline_loads_both_municipalities(self):
+    def test_shared_pipeline_loads_all_registered_agencies(self):
         for config in (JACKSON_MUNICIPALITY, DEMO_CITY_MUNICIPALITY):
             with self.subTest(municipality=config.slug):
                 roads = load_streamlit_inventory(config.data_path, config.name)
                 self.assertGreater(len(roads), 0)
+                self.assertTrue(roads["Agency"].eq(config.short_name).all())
                 self.assertTrue(roads["County"].eq(config.name).all())
                 self.assertIn("Risk Score", roads.columns)
                 self.assertIn("Estimated Cost", roads.columns)
