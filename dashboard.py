@@ -170,39 +170,6 @@ if jackson_pilot_mode:
     render_jackson_pilot()
     st.stop()
 
-    jackson_roads = load_jackson_streamlit_inventory()
-    selected_scenario = st.session_state.get(
-        "jackson_scenario",
-        "Balanced Annual Program",
-    )
-    jackson_results = build_jackson_scenario_results(
-        jackson_roads,
-        selected_scenario,
-    )
-
-    render_jackson_executive_overview(jackson_roads, jackson_results)
-
-    st.markdown("### Guided municipal briefing")
-    st.caption("Network condition → risk and map → recommended investments → budget scenario → executive report")
-
-    left, right = st.columns([3, 2])
-    with left:
-        render_jackson_map(jackson_roads, jackson_results)
-    with right:
-        render_jackson_recommendations(jackson_results)
-
-    selected_scenario = render_jackson_scenario_selector()
-    jackson_results = build_jackson_scenario_results(
-        jackson_roads,
-        selected_scenario,
-    )
-    render_jackson_scenario_impact(jackson_results)
-
-    st.markdown("### 5. Executive report")
-    render_jackson_report(jackson_roads, jackson_results)
-    render_jackson_assumptions()
-    st.stop()
-
 # Legacy dependencies are intentionally loaded only outside Jackson Pilot mode.
 import inspect
 import time
@@ -236,7 +203,6 @@ from components.reports_panel import render_reports_panel
 from components.road_detail import render_road_detail
 from components.project_builder import render_project_panel
 from components.scenario_panel import render_scenario_panel
-from gis import engine_old
 from gis.styles import risk_color
 from gis.county_summary import build_county_summary
 from gis.county_map import build_county_heatmap
@@ -326,10 +292,11 @@ else:
 
     @st.cache_data
     def load_roads():
-
-        if jackson_pilot_mode:
-            return load_jackson_streamlit_inventory()
-        return pd.read_csv("data/roads_demo_enriched.csv")
+        data_path = Path(JACKSON_DEMO_DATA_PATH)
+        return load_cached_jackson_inventory(
+            str(data_path),
+            data_path.stat().st_mtime_ns,
+        )
 
     roads = load_roads()
 

@@ -26,7 +26,11 @@ JACKSON_MAP_ZOOM = 12
 
 
 def is_jackson_pilot_mode() -> bool:
-    """Return whether the app was explicitly started in Jackson Pilot mode."""
+    """Return whether the Jackson demo should be rendered.
 
-    return os.getenv(PILOT_MODE_ENV_VAR, "").strip().lower() == JACKSON_PILOT_MODE
+    This Jackson-specific repository opens the pilot by default. An explicit
+    non-Jackson ``PAVENTRA_MODE`` value still exposes the retained legacy app.
+    """
 
+    configured_mode = os.getenv(PILOT_MODE_ENV_VAR, JACKSON_PILOT_MODE)
+    return configured_mode.strip().lower() == JACKSON_PILOT_MODE
