@@ -7,7 +7,7 @@ import pandas as pd
 from helpers.optimizer_helpers import optimize_budget
 
 
-MUNICIPALITY_SCENARIOS = {
+STANDARD_SCENARIOS = {
     "Preserve the Network": {
         "budget": 1_500_000,
         "goal": "Treat Most Roads",
@@ -28,18 +28,66 @@ MUNICIPALITY_SCENARIOS = {
     },
 }
 
+ROAD_COMMISSION_DEMO_SCENARIOS = {
+    "Preserve the Network": {
+        "budget": 2_000_000,
+        "goal": "Treat Most Roads",
+        "strategy": "Lowest Cost",
+        "description": "Prioritizes lower-cost preventive work across the maintained network.",
+    },
+    "Balanced Annual Program": {
+        "budget": 3_500_000,
+        "goal": "Reduce Highest Risk",
+        "strategy": "AI Recommendation",
+        "description": "Balances systemwide risk reduction and stewardship of available funds.",
+    },
+    "Address Urgent Needs": {
+        "budget": 5_500_000,
+        "goal": "Reduce Highest Risk",
+        "strategy": "Highest Risk",
+        "description": "Focuses available funding on the highest-risk maintained segments first.",
+    },
+}
 
-def get_municipality_scenario(name: str) -> dict:
+SCENARIO_CATALOGS = {
+    "standard": STANDARD_SCENARIOS,
+    "road_commission_demo": ROAD_COMMISSION_DEMO_SCENARIOS,
+}
+DEFAULT_SCENARIO_CATALOG_ID = "standard"
+
+# Phase 4 compatibility alias for callers expecting the original shared catalog.
+MUNICIPALITY_SCENARIOS = STANDARD_SCENARIOS
+
+
+def get_scenario_catalog(catalog_id: str) -> dict[str, dict]:
+    """Return a defensive copy of one configured scenario catalog."""
+
+    try:
+        catalog = SCENARIO_CATALOGS[catalog_id]
+    except KeyError as exc:
+        available = ", ".join(sorted(SCENARIO_CATALOGS))
+        raise ValueError(
+            f"Unknown scenario catalog '{catalog_id}'. Available catalogs: {available}."
+        ) from exc
+    return {name: dict(scenario) for name, scenario in catalog.items()}
+
+
+def get_municipality_scenario(
+    name: str,
+    catalog_id: str = DEFAULT_SCENARIO_CATALOG_ID,
+) -> dict:
     """Return a defensive copy of one configured demonstration scenario."""
 
-    if name not in MUNICIPALITY_SCENARIOS:
-        raise KeyError(f"Unknown municipality scenario: {name}")
-    return dict(MUNICIPALITY_SCENARIOS[name])
+    catalog = get_scenario_catalog(catalog_id)
+    if name not in catalog:
+        raise KeyError(f"Unknown scenario '{name}' in catalog '{catalog_id}'")
+    return dict(catalog[name])
 
 
 def build_municipality_scenario_results(
     roads: pd.DataFrame,
     scenario_name: str,
+    catalog_id: str = DEFAULT_SCENARIO_CATALOG_ID,
 ) -> dict:
     """Run one preset through the existing optimizer and describe its impact.
 
@@ -48,7 +96,7 @@ def build_municipality_scenario_results(
     engineering forecast.
     """
 
-    scenario = get_municipality_scenario(scenario_name)
+    scenario = get_municipality_scenario(scenario_name, catalog_id)
     eligible_roads = roads[roads["Estimated Cost"] > 0].copy()
     results = optimize_budget(
         eligible_roads,

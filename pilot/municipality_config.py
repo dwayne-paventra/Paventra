@@ -22,14 +22,21 @@ class MunicipalityConfig:
     map_zoom: int
     pilot_mode: str
     inventory_adapter: str
+    entity_type: str
+    formal_name: str
+    short_name: str
+    pilot_label: str
+    leadership_label: str
+    official_action_label: str
+    scenario_catalog_id: str
 
     @property
     def pilot_name(self) -> str:
-        return f"{self.name} Municipal Pilot"
+        return f"{self.short_name} {self.pilot_label}"
 
     @property
     def pilot_disclaimer(self) -> str:
-        return f"Demonstration Environment — Not an official {self.display_name} analysis."
+        return f"Demonstration Environment — Not an official {self.formal_name} analysis."
 
 
 def resolve_municipality(

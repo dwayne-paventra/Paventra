@@ -15,6 +15,7 @@ from pilot.municipality_data import load_municipality_inventory
 from pilot.municipality_registry import (
     DEFAULT_MUNICIPALITY_SLUG,
     DEMO_CITY_MUNICIPALITY,
+    DEMO_ROAD_COMMISSION_MUNICIPALITY,
     JACKSON_MUNICIPALITY,
     MUNICIPALITIES,
     MUNICIPALITY_ENV_VAR,
@@ -32,6 +33,11 @@ class MunicipalityConfigTests(unittest.TestCase):
         self.assertEqual(active.name, "Jackson")
         self.assertEqual(active.state, "Michigan")
         self.assertEqual(active.display_name, "City of Jackson")
+        self.assertEqual(active.entity_type, "city")
+        self.assertEqual(active.formal_name, "City of Jackson")
+        self.assertEqual(active.short_name, "Jackson")
+        self.assertEqual(active.leadership_label, "municipal leadership")
+        self.assertEqual(active.scenario_catalog_id, "standard")
         self.assertEqual(active.pilot_name, "Jackson Municipal Pilot")
         self.assertTrue(active.data_path.is_file())
 
@@ -58,7 +64,29 @@ class MunicipalityConfigTests(unittest.TestCase):
         self.assertIs(active, DEMO_CITY_MUNICIPALITY)
         self.assertEqual(active.name, "Demo City")
         self.assertEqual(active.display_name, "City of Demo City")
+        self.assertEqual(active.formal_name, "City of Demo City")
+        self.assertEqual(active.scenario_catalog_id, "standard")
         self.assertTrue(active.data_path.is_file())
+
+    def test_non_city_agency_resolves_with_its_own_terminology(self):
+        with patch.dict(
+            os.environ,
+            {MUNICIPALITY_ENV_VAR: "demo_road_commission"},
+            clear=True,
+        ):
+            active = get_active_municipality_config()
+
+        self.assertIs(active, DEMO_ROAD_COMMISSION_MUNICIPALITY)
+        self.assertEqual(active.entity_type, "road commission")
+        self.assertEqual(active.formal_name, "Demo County Road Commission")
+        self.assertEqual(active.short_name, "Demo County")
+        self.assertEqual(active.pilot_name, "Demo County Road Commission Pilot")
+        self.assertEqual(active.leadership_label, "road commission leadership")
+        self.assertEqual(
+            active.official_action_label,
+            "official road commission determination",
+        )
+        self.assertEqual(active.scenario_catalog_id, "road_commission_demo")
 
     def test_jackson_pilot_mode_keeps_legacy_override(self):
         with patch.dict(os.environ, {}, clear=True):
@@ -67,7 +95,7 @@ class MunicipalityConfigTests(unittest.TestCase):
         with patch.dict(os.environ, {PILOT_MODE_ENV_VAR: "legacy"}, clear=True):
             self.assertFalse(is_jackson_pilot_mode())
 
-    def test_both_registered_municipalities_load_valid_inventories(self):
+    def test_all_registered_municipalities_load_valid_inventories(self):
         required_columns = {
             "Road ID", "Road Name", "County", "PCI", "Risk Score",
             "Risk Level", "Estimated Cost", "Latitude", "Longitude",

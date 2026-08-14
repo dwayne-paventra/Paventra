@@ -24,6 +24,13 @@ JACKSON_MUNICIPALITY = MunicipalityConfig(
     map_zoom=12,
     pilot_mode="jackson_pilot",
     inventory_adapter="canonical_demo",
+    entity_type="city",
+    formal_name="City of Jackson",
+    short_name="Jackson",
+    pilot_label="Municipal Pilot",
+    leadership_label="municipal leadership",
+    official_action_label="official city finding",
+    scenario_catalog_id="standard",
 )
 
 DEMO_CITY_MUNICIPALITY = MunicipalityConfig(
@@ -38,11 +45,40 @@ DEMO_CITY_MUNICIPALITY = MunicipalityConfig(
     map_zoom=12,
     pilot_mode="demo_city_pilot",
     inventory_adapter="canonical_demo",
+    entity_type="city",
+    formal_name="City of Demo City",
+    short_name="Demo City",
+    pilot_label="Municipal Pilot",
+    leadership_label="municipal leadership",
+    official_action_label="official city finding",
+    scenario_catalog_id="standard",
+)
+
+DEMO_ROAD_COMMISSION_MUNICIPALITY = MunicipalityConfig(
+    municipality_id="demo-county-road-commission-mi",
+    slug="demo_road_commission",
+    name="Demo County",
+    state="Michigan",
+    display_name="Demo County Road Commission",
+    data_directory=PROJECT_ROOT / "data" / "demo_city",
+    data_path=PROJECT_ROOT / "data" / "demo_city" / "roads_demo_city.csv",
+    map_center=(42.3100, -84.0200),
+    map_zoom=11,
+    pilot_mode="demo_road_commission_pilot",
+    inventory_adapter="canonical_demo",
+    entity_type="road commission",
+    formal_name="Demo County Road Commission",
+    short_name="Demo County",
+    pilot_label="Road Commission Pilot",
+    leadership_label="road commission leadership",
+    official_action_label="official road commission determination",
+    scenario_catalog_id="road_commission_demo",
 )
 
 MUNICIPALITIES = {
     JACKSON_MUNICIPALITY.slug: JACKSON_MUNICIPALITY,
     DEMO_CITY_MUNICIPALITY.slug: DEMO_CITY_MUNICIPALITY,
+    DEMO_ROAD_COMMISSION_MUNICIPALITY.slug: DEMO_ROAD_COMMISSION_MUNICIPALITY,
 }
 DEFAULT_MUNICIPALITY_SLUG = JACKSON_MUNICIPALITY.slug
 

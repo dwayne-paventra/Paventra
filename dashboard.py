@@ -29,13 +29,23 @@ def load_cached_municipality_inventory(
 
 
 @st.cache_data(show_spinner=False)
-def build_cached_municipality_scenario(roads, scenario_name: str, dataset_version: int, assumptions_version: str):
+def build_cached_municipality_scenario(
+    roads,
+    scenario_name: str,
+    scenario_catalog_id: str,
+    dataset_version: int,
+    assumptions_version: str,
+):
     """Cache a scenario by its data version and transparent assumptions."""
 
     del dataset_version, assumptions_version  # Deliberately part of the cache key.
     from pilot.municipality_scenarios import build_municipality_scenario_results
 
-    return build_municipality_scenario_results(roads, scenario_name)
+    return build_municipality_scenario_results(
+        roads,
+        scenario_name,
+        scenario_catalog_id,
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -50,7 +60,7 @@ def build_cached_municipality_report(
     """Build the requested PDF once per data, scenario, date, and template version."""
 
     del dataset_version, report_date, report_version  # Deliberately part of the cache key.
-    from components.jackson_report import build_municipality_report
+    from components.municipality_report import build_municipality_report
 
     return build_municipality_report(
         get_municipality_config(municipality_slug),
@@ -63,7 +73,7 @@ def render_municipality_pilot() -> None:
     """Render the active municipality without eagerly loading optional dependencies."""
 
     from helpers.sidebar import render_sidebar
-    from components.jackson_executive import render_municipality_executive_overview
+    from components.municipality_executive import render_municipality_executive_overview
 
     render_sidebar(
         pilot_mode=True,
@@ -84,18 +94,23 @@ def render_municipality_pilot() -> None:
     if not st.session_state.get("municipality_briefing_open", False):
         return
 
-    from pilot.municipality_scenarios import MUNICIPALITY_SCENARIOS
-    from components.jackson_assumptions import render_municipality_assumptions
-    from components.jackson_recommendations import render_municipality_recommendations
-    from components.jackson_scenarios import (
+    from pilot.municipality_scenarios import get_scenario_catalog
+    from components.municipality_assumptions import render_municipality_assumptions
+    from components.municipality_recommendations import render_municipality_recommendations
+    from components.municipality_scenarios import (
         render_municipality_scenario_impact,
         render_municipality_scenario_selector,
     )
 
-    selected_scenario = render_municipality_scenario_selector(MUNICIPALITY_SCENARIOS)
-    assumptions_version = json.dumps(MUNICIPALITY_SCENARIOS, sort_keys=True)
+    scenario_catalog = get_scenario_catalog(ACTIVE_MUNICIPALITY.scenario_catalog_id)
+    selected_scenario = render_municipality_scenario_selector(scenario_catalog)
+    assumptions_version = json.dumps(scenario_catalog, sort_keys=True)
     municipality_results = build_cached_municipality_scenario(
-        municipality_roads, selected_scenario, dataset_version, assumptions_version
+        municipality_roads,
+        selected_scenario,
+        ACTIVE_MUNICIPALITY.scenario_catalog_id,
+        dataset_version,
+        assumptions_version,
     )
 
     st.markdown("### Investment recommendations")
@@ -107,7 +122,7 @@ def render_municipality_pilot() -> None:
         st.session_state["municipality_map_open"] = True
     if st.session_state.get("municipality_map_open", False):
         # Folium and GeoPandas are intentionally imported only after this action.
-        from components.jackson_map import render_municipality_map
+        from components.municipality_map import render_municipality_map
 
         render_municipality_map(
             ACTIVE_MUNICIPALITY,
@@ -125,9 +140,9 @@ def render_municipality_pilot() -> None:
             municipality_results,
             dataset_version,
             date.today().isoformat(),
-            "municipality-pilot-report-v1.1",
+            "municipality-pilot-report-v1.2",
         )
-        from components.jackson_report import render_municipality_report
+        from components.municipality_report import render_municipality_report
 
         render_municipality_report(ACTIVE_MUNICIPALITY, report_bytes)
 
