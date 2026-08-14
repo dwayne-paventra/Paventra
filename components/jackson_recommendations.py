@@ -1,17 +1,20 @@
-"""City-facing recommendation table for the Jackson Pilot."""
+"""Municipality recommendations with a Jackson compatibility entry point."""
 
 from __future__ import annotations
 
 import pandas as pd
 import streamlit as st
 
-from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+from pilot.municipality_config import MunicipalityConfig
 
 
-def render_jackson_recommendations(results: dict) -> None:
+def render_municipality_recommendations(
+    config: MunicipalityConfig,
+    results: dict,
+) -> None:
     st.subheader("3. Recommended investments")
     st.caption(
-        f"What should {ACTIVE_MUNICIPALITY.name} fund first? Rank reflects "
+        f"What should {config.name} fund first? Rank reflects "
         "the selected strategy, current risk score, and available budget."
     )
     roads = results["roads"]
@@ -35,3 +38,11 @@ def render_jackson_recommendations(results: dict) -> None:
         hide_index=True,
     )
     st.divider()
+
+
+def render_jackson_recommendations(results: dict) -> None:
+    """Compatibility wrapper for the original active-municipality entry point."""
+
+    from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+
+    render_municipality_recommendations(ACTIVE_MUNICIPALITY, results)

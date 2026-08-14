@@ -1,4 +1,4 @@
-"""Polished executive reporting for the illustrative Jackson Pilot."""
+"""Municipality reporting with Jackson compatibility entry points."""
 
 from __future__ import annotations
 
@@ -11,26 +11,42 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+from pilot.municipality_config import MunicipalityConfig
 
 
-def build_jackson_report(roads, results: dict) -> bytes:
+def municipality_report_title(config: MunicipalityConfig) -> str:
+    """Return the municipality-specific title used in the PDF."""
+
+    return f"{config.name} Transportation Investment Scenario"
+
+
+def municipality_report_filename(config: MunicipalityConfig) -> str:
+    """Return a safe municipality-specific download filename."""
+
+    return f"{config.slug}_transportation_investment_scenario.pdf"
+
+
+def build_municipality_report(
+    config: MunicipalityConfig,
+    roads,
+    results: dict,
+) -> bytes:
     """Create an executive PDF in memory for the selected pilot scenario."""
 
     stream = BytesIO()
     doc = SimpleDocTemplate(stream, pagesize=letter, rightMargin=42, leftMargin=42, topMargin=42, bottomMargin=42)
     styles = getSampleStyleSheet()
-    title = ParagraphStyle("JacksonTitle", parent=styles["Title"], textColor=colors.HexColor("#005EA2"), fontSize=20, leading=24)
-    heading = ParagraphStyle("JacksonHeading", parent=styles["Heading2"], textColor=colors.HexColor("#0B3C5D"), spaceBefore=12)
+    title = ParagraphStyle("MunicipalityTitle", parent=styles["Title"], textColor=colors.HexColor("#005EA2"), fontSize=20, leading=24)
+    heading = ParagraphStyle("MunicipalityHeading", parent=styles["Heading2"], textColor=colors.HexColor("#0B3C5D"), spaceBefore=12)
     body = styles["BodyText"]
     data_version = (
         str(roads["data_updated_at"].max())
         if "data_updated_at" in roads.columns
         else "Illustrative demo dataset"
     )
-    story = [Paragraph(f"Paventra | {ACTIVE_MUNICIPALITY.pilot_name}", heading)]
+    story = [Paragraph(f"Paventra | {config.pilot_name}", heading)]
     story.append(Paragraph(
-        f"{ACTIVE_MUNICIPALITY.name} Transportation Investment Scenario",
+        municipality_report_title(config),
         title,
     ))
     story.append(Paragraph(
@@ -92,7 +108,7 @@ def build_jackson_report(roads, results: dict) -> bytes:
     ))
     story.append(Spacer(1, 10))
     story.append(Paragraph(
-        f"<b>{ACTIVE_MUNICIPALITY.pilot_disclaimer}</b> Roadway records, PCI values, costs, and map locations are synthetic or illustrative demonstration inputs. "
+        f"<b>{config.pilot_disclaimer}</b> Roadway records, PCI values, costs, and map locations are synthetic or illustrative demonstration inputs. "
         "This report is a planning discussion aid, not an engineering determination or official City finding.",
         body,
     ))
@@ -100,7 +116,10 @@ def build_jackson_report(roads, results: dict) -> bytes:
     return stream.getvalue()
 
 
-def render_jackson_report(report_bytes: bytes) -> None:
+def render_municipality_report(
+    config: MunicipalityConfig,
+    report_bytes: bytes,
+) -> None:
     """Render a report that was explicitly requested and prepared by the dashboard."""
 
     import streamlit as st
@@ -110,7 +129,23 @@ def render_jackson_report(report_bytes: bytes) -> None:
     st.download_button(
         "Download executive briefing (PDF)",
         data=report_bytes,
-        file_name=f"{ACTIVE_MUNICIPALITY.slug}_transportation_investment_scenario.pdf",
+        file_name=municipality_report_filename(config),
         mime="application/pdf",
         use_container_width=False,
     )
+
+
+def build_jackson_report(roads, results: dict) -> bytes:
+    """Compatibility wrapper for the original active-municipality report builder."""
+
+    from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+
+    return build_municipality_report(ACTIVE_MUNICIPALITY, roads, results)
+
+
+def render_jackson_report(report_bytes: bytes) -> None:
+    """Compatibility wrapper for the original active-municipality report UI."""
+
+    from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+
+    render_municipality_report(ACTIVE_MUNICIPALITY, report_bytes)

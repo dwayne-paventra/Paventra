@@ -1,4 +1,4 @@
-"""Jackson Pilot map explorer built on the existing Folium map engine."""
+"""Municipality map explorer with a Jackson compatibility entry point."""
 
 from __future__ import annotations
 
@@ -6,15 +6,20 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from gis.engine import create_network_map
-from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+from pilot.municipality_config import MunicipalityConfig
 
 
-def render_jackson_map(roads, results: dict) -> None:
+def render_municipality_map(
+    config: MunicipalityConfig,
+    roads,
+    results: dict,
+    selection_key: str = "municipality_road_selection",
+) -> None:
     st.subheader("2. Risk and network map")
     st.caption("Colored markers show current risk. Starred markers are priority investment recommendations.")
 
     road_names = roads["Road Name"].tolist()
-    selected_name = st.selectbox("Select a road to review", road_names, key="jackson_road_selection")
+    selected_name = st.selectbox("Select a road to review", road_names, key=selection_key)
     selected_road = roads.loc[roads["Road Name"] == selected_name].iloc[0]
     selected_ids = set(results["selected_ids"])
     selected_ids.add(str(selected_road["Road ID"]))
@@ -26,8 +31,8 @@ def render_jackson_map(roads, results: dict) -> None:
         road_map = create_network_map(
             map_roads,
             selected_ids=selected_ids,
-            map_center=ACTIVE_MUNICIPALITY.map_center,
-            zoom_start=ACTIVE_MUNICIPALITY.map_zoom,
+            map_center=config.map_center,
+            zoom_start=config.map_zoom,
         )
         st_folium(road_map, width=None, height=560, returned_objects=[])
     except Exception:
@@ -44,3 +49,16 @@ def render_jackson_map(roads, results: dict) -> None:
     detail_columns[1].metric("Estimated cost", f"${selected_road['Estimated Cost']:,.0f}")
     st.info(f"Why it is a priority: {selected_road['Risk Reason']}")
     st.divider()
+
+
+def render_jackson_map(roads, results: dict) -> None:
+    """Compatibility wrapper retaining the original widget key."""
+
+    from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+
+    render_municipality_map(
+        ACTIVE_MUNICIPALITY,
+        roads,
+        results,
+        selection_key="jackson_road_selection",
+    )

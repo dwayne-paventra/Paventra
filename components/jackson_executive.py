@@ -1,13 +1,17 @@
-"""Executive-facing components for the Jackson Municipal Pilot."""
+"""Municipality executive overview with Jackson compatibility entry points."""
 
 from __future__ import annotations
 
 import streamlit as st
 
-from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+from pilot.municipality_config import MunicipalityConfig
 
 
-def render_jackson_executive_overview(roads, results: dict | None = None) -> None:
+def render_municipality_executive_overview(
+    config: MunicipalityConfig,
+    roads,
+    results: dict | None = None,
+) -> None:
     """Render an executive briefing, intentionally free of engineering jargon."""
 
     average_pci = float(roads["PCI"].mean()) if not roads.empty else 0.0
@@ -18,10 +22,10 @@ def render_jackson_executive_overview(roads, results: dict | None = None) -> Non
     demonstration_need = float(roads["Estimated Cost"].sum()) if not roads.empty else 0.0
     annual_investment = float(results["scenario"]["budget"]) if results else 3_000_000.0
 
-    st.title(ACTIVE_MUNICIPALITY.pilot_name)
+    st.title(config.pilot_name)
     st.caption("A decision briefing for pavement investment planning")
     st.markdown(
-        f'<div class="pilot-notice">{ACTIVE_MUNICIPALITY.pilot_disclaimer}</div>',
+        f'<div class="pilot-notice">{config.pilot_disclaimer}</div>',
         unsafe_allow_html=True,
     )
     st.markdown("### 1. Network condition")
@@ -46,3 +50,11 @@ def render_jackson_executive_overview(roads, results: dict | None = None) -> Non
     for column, (label, value) in zip(st.columns(2), values[3:]):
         column.metric(label, value)
     st.divider()
+
+
+def render_jackson_executive_overview(roads, results: dict | None = None) -> None:
+    """Compatibility wrapper for the original active-municipality entry point."""
+
+    from pilot.municipality_registry import ACTIVE_MUNICIPALITY
+
+    render_municipality_executive_overview(ACTIVE_MUNICIPALITY, roads, results)

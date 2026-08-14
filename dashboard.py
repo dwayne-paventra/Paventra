@@ -29,30 +29,41 @@ def load_cached_municipality_inventory(
 
 
 @st.cache_data(show_spinner=False)
-def build_cached_jackson_scenario(roads, scenario_name: str, dataset_version: int, assumptions_version: str):
+def build_cached_municipality_scenario(roads, scenario_name: str, dataset_version: int, assumptions_version: str):
     """Cache a scenario by its data version and transparent assumptions."""
 
     del dataset_version, assumptions_version  # Deliberately part of the cache key.
-    from pilot.jackson_scenarios import build_jackson_scenario_results
+    from pilot.municipality_scenarios import build_municipality_scenario_results
 
-    return build_jackson_scenario_results(roads, scenario_name)
+    return build_municipality_scenario_results(roads, scenario_name)
 
 
 @st.cache_data(show_spinner=False)
-def build_cached_jackson_report(roads, results: dict, dataset_version: int, report_date: str, report_version: str) -> bytes:
+def build_cached_municipality_report(
+    municipality_slug: str,
+    roads,
+    results: dict,
+    dataset_version: int,
+    report_date: str,
+    report_version: str,
+) -> bytes:
     """Build the requested PDF once per data, scenario, date, and template version."""
 
     del dataset_version, report_date, report_version  # Deliberately part of the cache key.
-    from components.jackson_report import build_jackson_report
+    from components.jackson_report import build_municipality_report
 
-    return build_jackson_report(roads, results)
+    return build_municipality_report(
+        get_municipality_config(municipality_slug),
+        roads,
+        results,
+    )
 
 
-def render_jackson_pilot() -> None:
-    """Render the Jackson briefing without loading optional GIS or PDF dependencies."""
+def render_municipality_pilot() -> None:
+    """Render the active municipality without eagerly loading optional dependencies."""
 
     from helpers.sidebar import render_sidebar
-    from components.jackson_executive import render_jackson_executive_overview
+    from components.jackson_executive import render_municipality_executive_overview
 
     render_sidebar(
         pilot_mode=True,
@@ -61,58 +72,66 @@ def render_jackson_pilot() -> None:
 
     data_path = ACTIVE_MUNICIPALITY.data_path
     dataset_version = data_path.stat().st_mtime_ns
-    jackson_roads = load_cached_municipality_inventory(
+    municipality_roads = load_cached_municipality_inventory(
         ACTIVE_MUNICIPALITY.slug,
         str(data_path),
         dataset_version,
     )
 
-    render_jackson_executive_overview(jackson_roads)
-    if st.button("Open investment briefing", key="jackson_open_briefing"):
-        st.session_state["jackson_briefing_open"] = True
-    if not st.session_state.get("jackson_briefing_open", False):
+    render_municipality_executive_overview(ACTIVE_MUNICIPALITY, municipality_roads)
+    if st.button("Open investment briefing", key="municipality_open_briefing"):
+        st.session_state["municipality_briefing_open"] = True
+    if not st.session_state.get("municipality_briefing_open", False):
         return
 
-    from pilot.jackson_scenarios import JACKSON_SCENARIOS
-    from components.jackson_assumptions import render_jackson_assumptions
-    from components.jackson_recommendations import render_jackson_recommendations
-    from components.jackson_scenarios import render_jackson_scenario_impact, render_jackson_scenario_selector
+    from pilot.municipality_scenarios import MUNICIPALITY_SCENARIOS
+    from components.jackson_assumptions import render_municipality_assumptions
+    from components.jackson_recommendations import render_municipality_recommendations
+    from components.jackson_scenarios import (
+        render_municipality_scenario_impact,
+        render_municipality_scenario_selector,
+    )
 
-    selected_scenario = render_jackson_scenario_selector()
-    assumptions_version = json.dumps(JACKSON_SCENARIOS, sort_keys=True)
-    jackson_results = build_cached_jackson_scenario(
-        jackson_roads, selected_scenario, dataset_version, assumptions_version
+    selected_scenario = render_municipality_scenario_selector(MUNICIPALITY_SCENARIOS)
+    assumptions_version = json.dumps(MUNICIPALITY_SCENARIOS, sort_keys=True)
+    municipality_results = build_cached_municipality_scenario(
+        municipality_roads, selected_scenario, dataset_version, assumptions_version
     )
 
     st.markdown("### Investment recommendations")
-    render_jackson_recommendations(jackson_results)
-    render_jackson_scenario_impact(jackson_results)
+    render_municipality_recommendations(ACTIVE_MUNICIPALITY, municipality_results)
+    render_municipality_scenario_impact(municipality_results)
 
     st.markdown("### Network Explorer")
-    if st.button("Open interactive network map", key="jackson_open_map"):
-        st.session_state["jackson_map_open"] = True
-    if st.session_state.get("jackson_map_open", False):
+    if st.button("Open interactive network map", key="municipality_open_map"):
+        st.session_state["municipality_map_open"] = True
+    if st.session_state.get("municipality_map_open", False):
         # Folium and GeoPandas are intentionally imported only after this action.
-        from components.jackson_map import render_jackson_map
+        from components.jackson_map import render_municipality_map
 
-        render_jackson_map(jackson_roads, jackson_results)
+        render_municipality_map(
+            ACTIVE_MUNICIPALITY,
+            municipality_roads,
+            municipality_results,
+        )
 
     st.markdown("### Executive report")
-    if st.button("Generate executive briefing", key="jackson_generate_report"):
-        st.session_state["jackson_report_requested"] = True
-    if st.session_state.get("jackson_report_requested", False):
-        report_bytes = build_cached_jackson_report(
-            jackson_roads,
-            jackson_results,
+    if st.button("Generate executive briefing", key="municipality_generate_report"):
+        st.session_state["municipality_report_requested"] = True
+    if st.session_state.get("municipality_report_requested", False):
+        report_bytes = build_cached_municipality_report(
+            ACTIVE_MUNICIPALITY.slug,
+            municipality_roads,
+            municipality_results,
             dataset_version,
             date.today().isoformat(),
-            "jackson-pilot-report-v1.1",
+            "municipality-pilot-report-v1.1",
         )
-        from components.jackson_report import render_jackson_report
+        from components.jackson_report import render_municipality_report
 
-        render_jackson_report(report_bytes)
+        render_municipality_report(ACTIVE_MUNICIPALITY, report_bytes)
 
-    render_jackson_assumptions()
+    render_municipality_assumptions(ACTIVE_MUNICIPALITY)
 
 # ------------------------------------------------
 # Page Configuration
@@ -173,14 +192,14 @@ h1{
 """, unsafe_allow_html=True)
 
 # ------------------------------------------------
-# Jackson Municipal Pilot
+# Municipality Pilot
 # ------------------------------------------------
 
 if municipality_pilot_mode:
-    render_jackson_pilot()
+    render_municipality_pilot()
     st.stop()
 
-# Legacy dependencies are intentionally loaded only outside Jackson Pilot mode.
+# Legacy dependencies are intentionally loaded only outside municipality pilot mode.
 import inspect
 import time
 
