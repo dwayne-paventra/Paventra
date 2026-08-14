@@ -19,6 +19,7 @@ from pilot.municipality_registry import (
     JACKSON_MUNICIPALITY,
     MUNICIPALITIES,
     MUNICIPALITY_ENV_VAR,
+    ONBOARDING_DEMO_MUNICIPALITY,
     get_active_municipality_config,
 )
 
@@ -89,6 +90,19 @@ class MunicipalityConfigTests(unittest.TestCase):
             "official road commission determination",
         )
         self.assertEqual(active.scenario_catalog_id, "road_commission_demo")
+
+    def test_onboarding_demo_resolves_from_environment(self):
+        with patch.dict(
+            os.environ,
+            {MUNICIPALITY_ENV_VAR: "onboarding_demo"},
+            clear=True,
+        ):
+            active = get_active_municipality_config()
+
+        self.assertIs(active, ONBOARDING_DEMO_MUNICIPALITY)
+        self.assertEqual(active.formal_name, "Pine Ridge Township")
+        self.assertEqual(active.inventory_adapter, "mapped_csv")
+        self.assertTrue(active.data_path.is_file())
 
     def test_jackson_pilot_mode_keeps_legacy_override(self):
         with patch.dict(os.environ, {}, clear=True):

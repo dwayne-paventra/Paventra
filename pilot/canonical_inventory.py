@@ -35,10 +35,12 @@ CANONICAL_COLUMNS = (
     "data_updated_at",
 )
 
-_NUMERIC_COLUMNS = (
+CANONICAL_NUMERIC_COLUMNS = (
     "latitude", "longitude", "road_length_miles", "lanes", "pci", "adt",
     "age_years", "treatment_cost_per_lane_mile",
 )
+
+_NUMERIC_COLUMNS = CANONICAL_NUMERIC_COLUMNS
 
 _UI_COLUMNS = {
     "road_id": "Road ID",

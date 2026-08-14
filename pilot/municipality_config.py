@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 from pathlib import Path
-from typing import Mapping
+from typing import Mapping, Any
 
 
 SUPPORTED_ENTITY_TYPES = frozenset({
@@ -39,6 +39,8 @@ class MunicipalityConfig:
     leadership_label: str
     official_action_label: str
     scenario_catalog_id: str
+    source_column_mapping: Mapping[str, str] | None = None
+    canonical_defaults: Mapping[str, Any] | None = None
 
     @property
     def name(self) -> str:

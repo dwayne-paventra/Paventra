@@ -74,10 +74,57 @@ DEMO_ROAD_COMMISSION_MUNICIPALITY = MunicipalityConfig(
     scenario_catalog_id="road_commission_demo",
 )
 
+ONBOARDING_DEMO_COLUMN_MAPPING = {
+    "Asset_ID": "road_id",
+    "Segment_Code": "segment_id",
+    "Street_Name": "road_name",
+    "Begin_At": "from_street",
+    "End_At": "to_street",
+    "Owner": "jurisdiction",
+    "Lat_Value": "latitude",
+    "Lon_Value": "longitude",
+    "Length_Miles": "road_length_miles",
+    "Lane_Count": "lanes",
+    "Pavement": "surface_type",
+    "Route_Class": "functional_class",
+    "PCI_Score": "pci",
+    "Inspection_Date": "condition_date",
+    "Traffic_Band": "traffic_level",
+    "Daily_Traffic": "adt",
+    "Asset_Age": "age_years",
+    "Freeze_Exposure": "freeze_thaw",
+    "Proposed_Treatment": "recommended_treatment",
+    "Unit_Cost": "treatment_cost_per_lane_mile",
+    "Source_Status": "data_status",
+    "Source_Label": "data_source",
+    "Last_Updated": "data_updated_at",
+}
+
+ONBOARDING_DEMO_MUNICIPALITY = MunicipalityConfig(
+    municipality_id="pine-ridge-township-mi",
+    slug="onboarding_demo",
+    state="Michigan",
+    data_directory=PROJECT_ROOT / "data" / "onboarding_demo",
+    data_path=PROJECT_ROOT / "data" / "onboarding_demo" / "source_roads.csv",
+    map_center=(42.1850, -84.1160),
+    map_zoom=12,
+    pilot_mode="onboarding_demo_pilot",
+    inventory_adapter="mapped_csv",
+    entity_type="township",
+    formal_name="Pine Ridge Township",
+    short_name="Pine Ridge",
+    pilot_label="Township Pilot",
+    leadership_label="township leadership",
+    official_action_label="official township determination",
+    scenario_catalog_id="standard",
+    source_column_mapping=ONBOARDING_DEMO_COLUMN_MAPPING,
+)
+
 MUNICIPALITIES = {
     JACKSON_MUNICIPALITY.slug: JACKSON_MUNICIPALITY,
     DEMO_CITY_MUNICIPALITY.slug: DEMO_CITY_MUNICIPALITY,
     DEMO_ROAD_COMMISSION_MUNICIPALITY.slug: DEMO_ROAD_COMMISSION_MUNICIPALITY,
+    ONBOARDING_DEMO_MUNICIPALITY.slug: ONBOARDING_DEMO_MUNICIPALITY,
 }
 DEFAULT_MUNICIPALITY_SLUG = JACKSON_MUNICIPALITY.slug
 
@@ -86,6 +133,7 @@ def validate_municipality_registry(
     configurations: Mapping[str, MunicipalityConfig] | None = None,
     *,
     inventory_adapters: Mapping | None = None,
+    inventory_adapter_validators: Mapping | None = None,
     scenario_catalogs: Mapping | None = None,
     default_slug: str | None = None,
 ) -> None:
@@ -96,9 +144,16 @@ def validate_municipality_registry(
         raise ValueError("Municipality registry must be a non-empty mapping.")
 
     if inventory_adapters is None:
-        from pilot.municipality_data import INVENTORY_ADAPTERS
+        from pilot.municipality_data import (
+            INVENTORY_ADAPTERS,
+            INVENTORY_ADAPTER_VALIDATORS,
+        )
 
         inventory_adapters = INVENTORY_ADAPTERS
+        if inventory_adapter_validators is None:
+            inventory_adapter_validators = INVENTORY_ADAPTER_VALIDATORS
+    elif inventory_adapter_validators is None:
+        inventory_adapter_validators = {}
     if scenario_catalogs is None:
         from pilot.municipality_scenarios import SCENARIO_CATALOGS
 
@@ -152,6 +207,14 @@ def validate_municipality_registry(
                 f"Municipality '{config.slug}' field 'scenario_catalog_id' references "
                 f"unknown catalog '{config.scenario_catalog_id}'."
             )
+        adapter_validator = inventory_adapter_validators.get(config.inventory_adapter)
+        if adapter_validator is not None:
+            if not callable(adapter_validator):
+                raise ValueError(
+                    f"Inventory adapter validator for '{config.inventory_adapter}' "
+                    "must be callable."
+                )
+            adapter_validator(config)
 
     if default_slug is not None and default_slug not in registry:
         raise ValueError(

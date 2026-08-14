@@ -14,7 +14,10 @@ from pilot.municipality_scenarios import (
 )
 
 
-KNOWN_ADAPTERS = {"canonical_demo": lambda config: config}
+KNOWN_ADAPTERS = {
+    "canonical_demo": lambda config: config,
+    "mapped_csv": lambda config: config,
+}
 
 
 class MunicipalityValidationTests(unittest.TestCase):

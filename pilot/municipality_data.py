@@ -10,6 +10,7 @@ from pilot.municipality_config import MunicipalityConfig
 
 
 InventoryAdapter = Callable[[MunicipalityConfig], pd.DataFrame]
+InventoryAdapterValidator = Callable[[MunicipalityConfig], None]
 
 
 def _load_canonical_demo_inventory(config: MunicipalityConfig) -> pd.DataFrame:
@@ -23,8 +24,29 @@ def _load_canonical_demo_inventory(config: MunicipalityConfig) -> pd.DataFrame:
     )
 
 
+def _load_mapped_csv_inventory(config: MunicipalityConfig) -> pd.DataFrame:
+    """Load a source CSV through the municipality onboarding mapper."""
+
+    from pilot.municipality_onboarding import load_onboarded_streamlit_inventory
+
+    return load_onboarded_streamlit_inventory(config)
+
+
+def _validate_mapped_csv_configuration(config: MunicipalityConfig) -> None:
+    """Validate mapped-source options without loading the source CSV."""
+
+    from pilot.municipality_onboarding import validate_onboarding_configuration
+
+    validate_onboarding_configuration(config)
+
+
 INVENTORY_ADAPTERS: dict[str, InventoryAdapter] = {
     "canonical_demo": _load_canonical_demo_inventory,
+    "mapped_csv": _load_mapped_csv_inventory,
+}
+
+INVENTORY_ADAPTER_VALIDATORS: dict[str, InventoryAdapterValidator] = {
+    "mapped_csv": _validate_mapped_csv_configuration,
 }
 
 
