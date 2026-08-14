@@ -6,7 +6,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from gis.engine import create_network_map
-from pilot.jackson_config import JACKSON_MAP_CENTER, JACKSON_MAP_ZOOM
+from pilot.jackson_config import ACTIVE_MUNICIPALITY
 
 
 def render_jackson_map(roads, results: dict) -> None:
@@ -26,8 +26,8 @@ def render_jackson_map(roads, results: dict) -> None:
         road_map = create_network_map(
             map_roads,
             selected_ids=selected_ids,
-            map_center=JACKSON_MAP_CENTER,
-            zoom_start=JACKSON_MAP_ZOOM,
+            map_center=ACTIVE_MUNICIPALITY.map_center,
+            zoom_start=ACTIVE_MUNICIPALITY.map_zoom,
         )
         st_folium(road_map, width=None, height=560, returned_objects=[])
     except Exception:

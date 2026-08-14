@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from pilot.jackson_config import JACKSON_DEMO_DATA_PATH
+from pilot.jackson_config import JACKSON_MUNICIPALITY
 from predictor import calculate_risk_details
 
 
@@ -99,7 +99,7 @@ def validate_jackson_schema(roads: pd.DataFrame) -> None:
         raise ValueError("Jackson demonstration data must be explicitly marked illustrative.")
 
 
-def load_jackson_canonical_data(path: str | Path = JACKSON_DEMO_DATA_PATH) -> pd.DataFrame:
+def load_jackson_canonical_data(path: str | Path = JACKSON_MUNICIPALITY.data_path) -> pd.DataFrame:
     """Load, validate, and enrich the canonical illustrative Jackson dataset."""
 
     roads = pd.read_csv(path)
@@ -133,7 +133,7 @@ def to_streamlit_inventory(roads: pd.DataFrame) -> pd.DataFrame:
     inventory["Risk Level"] = inventory["risk_level"]
     inventory["Risk Reason"] = inventory["risk_reason"]
     inventory["Speed Limit"] = 25
-    inventory["County"] = "Jackson"
+    inventory["County"] = JACKSON_MUNICIPALITY.name
     inventory["Lane Miles"] = inventory["Road Length"] * inventory["Lanes"]
     inventory["Estimated Cost"] = (
         inventory["Lane Miles"] * inventory["treatment_cost_per_lane_mile"]
@@ -141,7 +141,9 @@ def to_streamlit_inventory(roads: pd.DataFrame) -> pd.DataFrame:
     return inventory
 
 
-def load_jackson_streamlit_inventory(path: str | Path = JACKSON_DEMO_DATA_PATH) -> pd.DataFrame:
+def load_jackson_streamlit_inventory(
+    path: str | Path = JACKSON_MUNICIPALITY.data_path,
+) -> pd.DataFrame:
     """Load the pilot dataset in a form compatible with the current dashboard."""
 
     return to_streamlit_inventory(load_jackson_canonical_data(path))

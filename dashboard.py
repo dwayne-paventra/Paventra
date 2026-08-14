@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 from datetime import date
-from pathlib import Path
 import json
 
 import streamlit as st
 
 from pilot.jackson_config import (
-    JACKSON_DEMO_DATA_PATH,
-    PILOT_DISCLAIMER,
+    ACTIVE_MUNICIPALITY,
     is_jackson_pilot_mode,
 )
 
@@ -51,9 +49,12 @@ def render_jackson_pilot() -> None:
     from helpers.sidebar import render_sidebar
     from components.jackson_executive import render_jackson_executive_overview
 
-    render_sidebar(pilot_mode=True, pilot_notice=PILOT_DISCLAIMER)
+    render_sidebar(
+        pilot_mode=True,
+        pilot_notice=ACTIVE_MUNICIPALITY.pilot_disclaimer,
+    )
 
-    data_path = Path(JACKSON_DEMO_DATA_PATH)
+    data_path = ACTIVE_MUNICIPALITY.data_path
     dataset_version = data_path.stat().st_mtime_ns
     jackson_roads = load_cached_jackson_inventory(str(data_path), dataset_version)
 
@@ -292,7 +293,7 @@ else:
 
     @st.cache_data
     def load_roads():
-        data_path = Path(JACKSON_DEMO_DATA_PATH)
+        data_path = ACTIVE_MUNICIPALITY.data_path
         return load_cached_jackson_inventory(
             str(data_path),
             data_path.stat().st_mtime_ns,

@@ -5,10 +5,15 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from pilot.jackson_config import ACTIVE_MUNICIPALITY
+
 
 def render_jackson_recommendations(results: dict) -> None:
     st.subheader("3. Recommended investments")
-    st.caption("What should Jackson fund first? Rank reflects the selected strategy, current risk score, and available budget.")
+    st.caption(
+        f"What should {ACTIVE_MUNICIPALITY.name} fund first? Rank reflects "
+        "the selected strategy, current risk score, and available budget."
+    )
     roads = results["roads"]
     if roads.empty:
         st.info("No projects fit within this scenario's budget.")

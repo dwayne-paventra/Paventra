@@ -4,16 +4,18 @@ from __future__ import annotations
 
 import streamlit as st
 
+from pilot.jackson_config import ACTIVE_MUNICIPALITY
+
 
 def render_jackson_assumptions() -> None:
     """Explain the demonstration boundary and the inputs for a real pilot."""
 
     with st.expander("Pilot Assumptions & Data"):
         st.markdown(
-            "**This is an illustrative demonstration, not an official City of Jackson analysis.** "
+            f"**This is an illustrative demonstration, not an official {ACTIVE_MUNICIPALITY.display_name} analysis.** "
             "Roadway records, PCI values, treatment costs, and map locations/geometry are demonstration inputs unless separately validated. "
             "Scenario outcomes are planning estimates, not engineering forecasts or professional determinations. "
-            "No City of Jackson endorsement is implied."
+            f"No {ACTIVE_MUNICIPALITY.display_name} endorsement is implied."
         )
         st.markdown("**A validation pilot would replace these inputs with:**")
         st.markdown(

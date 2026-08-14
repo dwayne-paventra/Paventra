@@ -11,7 +11,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from pilot.jackson_config import PILOT_DISCLAIMER
+from pilot.jackson_config import ACTIVE_MUNICIPALITY
 
 
 def build_jackson_report(roads, results: dict) -> bytes:
@@ -28,8 +28,11 @@ def build_jackson_report(roads, results: dict) -> bytes:
         if "data_updated_at" in roads.columns
         else "Illustrative demo dataset"
     )
-    story = [Paragraph("Paventra | Jackson Municipal Pilot", heading)]
-    story.append(Paragraph("Jackson Transportation Investment Scenario", title))
+    story = [Paragraph(f"Paventra | {ACTIVE_MUNICIPALITY.pilot_name}", heading)]
+    story.append(Paragraph(
+        f"{ACTIVE_MUNICIPALITY.name} Transportation Investment Scenario",
+        title,
+    ))
     story.append(Paragraph(
         f"Illustrative executive briefing | Report date {date.today().isoformat()} | Data version {data_version} | Paventra Pilot v1.1",
         body,
@@ -89,7 +92,7 @@ def build_jackson_report(roads, results: dict) -> bytes:
     ))
     story.append(Spacer(1, 10))
     story.append(Paragraph(
-        f"<b>{PILOT_DISCLAIMER}</b> Roadway records, PCI values, costs, and map locations are synthetic or illustrative demonstration inputs. "
+        f"<b>{ACTIVE_MUNICIPALITY.pilot_disclaimer}</b> Roadway records, PCI values, costs, and map locations are synthetic or illustrative demonstration inputs. "
         "This report is a planning discussion aid, not an engineering determination or official City finding.",
         body,
     ))
@@ -107,7 +110,7 @@ def render_jackson_report(report_bytes: bytes) -> None:
     st.download_button(
         "Download executive briefing (PDF)",
         data=report_bytes,
-        file_name="jackson_transportation_investment_scenario.pdf",
+        file_name=f"{ACTIVE_MUNICIPALITY.slug}_transportation_investment_scenario.pdf",
         mime="application/pdf",
         use_container_width=False,
     )
