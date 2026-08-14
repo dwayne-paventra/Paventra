@@ -13,11 +13,11 @@ InventoryAdapter = Callable[[MunicipalityConfig], pd.DataFrame]
 
 
 def _load_canonical_demo_inventory(config: MunicipalityConfig) -> pd.DataFrame:
-    """Load a canonical demonstration CSV through the existing adapter."""
+    """Load a canonical demonstration CSV through the shared adapter."""
 
-    from pilot.jackson_data import load_jackson_streamlit_inventory
+    from pilot.canonical_inventory import load_streamlit_inventory
 
-    return load_jackson_streamlit_inventory(
+    return load_streamlit_inventory(
         config.data_path,
         municipality_name=config.name,
     )
