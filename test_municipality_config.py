@@ -1,22 +1,25 @@
 import os
 import unittest
-from pathlib import Path
 from unittest.mock import patch
 
 from pilot.jackson_config import (
-    DEFAULT_MUNICIPALITY_SLUG,
     JACKSON_DEMO_DATA_PATH,
     JACKSON_MAP_CENTER,
     JACKSON_MAP_ZOOM,
-    JACKSON_MUNICIPALITY,
-    MUNICIPALITY_ENV_VAR,
     PILOT_DISCLAIMER,
     PILOT_MODE_ENV_VAR,
     PILOT_NAME,
-    get_active_municipality_config,
     is_jackson_pilot_mode,
 )
-from pilot.municipality_config import MunicipalityConfig, resolve_municipality
+from pilot.municipality_data import load_municipality_inventory
+from pilot.municipality_registry import (
+    DEFAULT_MUNICIPALITY_SLUG,
+    DEMO_CITY_MUNICIPALITY,
+    JACKSON_MUNICIPALITY,
+    MUNICIPALITIES,
+    MUNICIPALITY_ENV_VAR,
+    get_active_municipality_config,
+)
 
 
 class MunicipalityConfigTests(unittest.TestCase):
@@ -44,6 +47,19 @@ class MunicipalityConfigTests(unittest.TestCase):
 
         self.assertIs(active, JACKSON_MUNICIPALITY)
 
+    def test_demo_city_resolves_from_environment(self):
+        with patch.dict(
+            os.environ,
+            {MUNICIPALITY_ENV_VAR: "demo_city"},
+            clear=True,
+        ):
+            active = get_active_municipality_config()
+
+        self.assertIs(active, DEMO_CITY_MUNICIPALITY)
+        self.assertEqual(active.name, "Demo City")
+        self.assertEqual(active.display_name, "City of Demo City")
+        self.assertTrue(active.data_path.is_file())
+
     def test_jackson_pilot_mode_keeps_legacy_override(self):
         with patch.dict(os.environ, {}, clear=True):
             self.assertTrue(is_jackson_pilot_mode())
@@ -51,34 +67,26 @@ class MunicipalityConfigTests(unittest.TestCase):
         with patch.dict(os.environ, {PILOT_MODE_ENV_VAR: "legacy"}, clear=True):
             self.assertFalse(is_jackson_pilot_mode())
 
-    def test_generic_config_can_represent_another_municipality(self):
-        example = MunicipalityConfig(
-            municipality_id="example-mi",
-            slug="example",
-            name="Example",
-            state="Michigan",
-            display_name="City of Example",
-            data_directory=Path("data/example"),
-            data_path=Path("data/example/roads.csv"),
-            map_center=(42.0, -84.0),
-            map_zoom=11,
-            pilot_mode="example_pilot",
-        )
+    def test_both_registered_municipalities_load_valid_inventories(self):
+        required_columns = {
+            "Road ID", "Road Name", "County", "PCI", "Risk Score",
+            "Risk Level", "Estimated Cost", "Latitude", "Longitude",
+        }
 
-        resolved = resolve_municipality(
-            {"jackson": JACKSON_MUNICIPALITY, "example": example},
-            "example",
-            "jackson",
-        )
-
-        self.assertIs(resolved, example)
-        self.assertEqual(resolved.pilot_name, "Example Municipal Pilot")
-        self.assertIn("City of Example", resolved.pilot_disclaimer)
+        for slug, config in MUNICIPALITIES.items():
+            with self.subTest(municipality=slug):
+                roads = load_municipality_inventory(config)
+                self.assertGreater(len(roads), 0)
+                self.assertTrue(required_columns.issubset(roads.columns))
+                self.assertTrue(roads["County"].eq(config.name).all())
+                self.assertTrue(roads["Road ID"].str.strip().ne("").all())
+                self.assertTrue(roads["Risk Score"].between(0, 100).all())
 
     def test_unknown_municipality_has_clear_error(self):
-        with self.assertRaisesRegex(ValueError, "Unknown municipality 'missing'"):
-            resolve_municipality(
-                {"jackson": JACKSON_MUNICIPALITY},
-                "missing",
-                "jackson",
-            )
+        with patch.dict(
+            os.environ,
+            {MUNICIPALITY_ENV_VAR: "missing"},
+            clear=True,
+        ):
+            with self.assertRaisesRegex(ValueError, "Unknown municipality 'missing'"):
+                get_active_municipality_config()

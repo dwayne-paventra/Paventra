@@ -21,6 +21,7 @@ class MunicipalityConfig:
     map_center: tuple[float, float]
     map_zoom: int
     pilot_mode: str
+    inventory_adapter: str
 
     @property
     def pilot_name(self) -> str:

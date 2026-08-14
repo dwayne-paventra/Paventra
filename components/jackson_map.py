@@ -6,7 +6,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from gis.engine import create_network_map
-from pilot.jackson_config import ACTIVE_MUNICIPALITY
+from pilot.municipality_registry import ACTIVE_MUNICIPALITY
 
 
 def render_jackson_map(roads, results: dict) -> None:

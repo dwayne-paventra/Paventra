@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from pilot.jackson_config import ACTIVE_MUNICIPALITY
+from pilot.municipality_registry import ACTIVE_MUNICIPALITY
 
 
 def render_jackson_assumptions() -> None:

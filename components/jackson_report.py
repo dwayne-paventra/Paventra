@@ -11,7 +11,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from pilot.jackson_config import ACTIVE_MUNICIPALITY
+from pilot.municipality_registry import ACTIVE_MUNICIPALITY
 
 
 def build_jackson_report(roads, results: dict) -> bytes:

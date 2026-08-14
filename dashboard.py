@@ -7,20 +7,25 @@ import json
 
 import streamlit as st
 
-from pilot.jackson_config import (
+from pilot.municipality_registry import (
     ACTIVE_MUNICIPALITY,
-    is_jackson_pilot_mode,
+    get_municipality_config,
+    is_active_municipality_pilot_mode,
 )
 
 
 @st.cache_data(show_spinner=False)
-def load_cached_jackson_inventory(data_path: str, modified_at_ns: int):
-    """Cache Jackson validation and risk enrichment until its source changes."""
+def load_cached_municipality_inventory(
+    municipality_slug: str,
+    data_path: str,
+    modified_at_ns: int,
+):
+    """Cache municipality inventory validation and enrichment."""
 
-    del modified_at_ns  # Deliberately part of the cache key.
-    from pilot.jackson_data import load_jackson_streamlit_inventory
+    del data_path, modified_at_ns  # Deliberately part of the cache key.
+    from pilot.municipality_data import load_municipality_inventory
 
-    return load_jackson_streamlit_inventory(data_path)
+    return load_municipality_inventory(get_municipality_config(municipality_slug))
 
 
 @st.cache_data(show_spinner=False)
@@ -56,7 +61,11 @@ def render_jackson_pilot() -> None:
 
     data_path = ACTIVE_MUNICIPALITY.data_path
     dataset_version = data_path.stat().st_mtime_ns
-    jackson_roads = load_cached_jackson_inventory(str(data_path), dataset_version)
+    jackson_roads = load_cached_municipality_inventory(
+        ACTIVE_MUNICIPALITY.slug,
+        str(data_path),
+        dataset_version,
+    )
 
     render_jackson_executive_overview(jackson_roads)
     if st.button("Open investment briefing", key="jackson_open_briefing"):
@@ -115,7 +124,7 @@ st.set_page_config(
     layout="wide"
 )
 
-jackson_pilot_mode = is_jackson_pilot_mode()
+municipality_pilot_mode = is_active_municipality_pilot_mode()
 
 from styles import load_css
 
@@ -167,7 +176,7 @@ h1{
 # Jackson Municipal Pilot
 # ------------------------------------------------
 
-if jackson_pilot_mode:
+if municipality_pilot_mode:
     render_jackson_pilot()
     st.stop()
 
@@ -294,7 +303,8 @@ else:
     @st.cache_data
     def load_roads():
         data_path = ACTIVE_MUNICIPALITY.data_path
-        return load_cached_jackson_inventory(
+        return load_cached_municipality_inventory(
+            ACTIVE_MUNICIPALITY.slug,
             str(data_path),
             data_path.stat().st_mtime_ns,
         )

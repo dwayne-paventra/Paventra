@@ -124,7 +124,10 @@ def load_jackson_canonical_data(path: str | Path = JACKSON_MUNICIPALITY.data_pat
     return roads
 
 
-def to_streamlit_inventory(roads: pd.DataFrame) -> pd.DataFrame:
+def to_streamlit_inventory(
+    roads: pd.DataFrame,
+    municipality_name: str = JACKSON_MUNICIPALITY.name,
+) -> pd.DataFrame:
     """Adapt the canonical contract to the existing, title-cased Streamlit UI."""
 
     inventory = roads.rename(columns=_LEGACY_COLUMNS).copy()
@@ -133,7 +136,7 @@ def to_streamlit_inventory(roads: pd.DataFrame) -> pd.DataFrame:
     inventory["Risk Level"] = inventory["risk_level"]
     inventory["Risk Reason"] = inventory["risk_reason"]
     inventory["Speed Limit"] = 25
-    inventory["County"] = JACKSON_MUNICIPALITY.name
+    inventory["County"] = municipality_name
     inventory["Lane Miles"] = inventory["Road Length"] * inventory["Lanes"]
     inventory["Estimated Cost"] = (
         inventory["Lane Miles"] * inventory["treatment_cost_per_lane_mile"]
@@ -143,7 +146,11 @@ def to_streamlit_inventory(roads: pd.DataFrame) -> pd.DataFrame:
 
 def load_jackson_streamlit_inventory(
     path: str | Path = JACKSON_MUNICIPALITY.data_path,
+    municipality_name: str = JACKSON_MUNICIPALITY.name,
 ) -> pd.DataFrame:
     """Load the pilot dataset in a form compatible with the current dashboard."""
 
-    return to_streamlit_inventory(load_jackson_canonical_data(path))
+    return to_streamlit_inventory(
+        load_jackson_canonical_data(path),
+        municipality_name=municipality_name,
+    )
