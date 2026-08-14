@@ -66,7 +66,13 @@ class MunicipalityConfig:
 def validate_municipality_config(config: MunicipalityConfig) -> None:
     """Validate one municipality's intrinsic identity and map configuration."""
 
-    identity = config.slug.strip() or config.municipality_id.strip() or "<unknown>"
+    slug = config.slug.strip() if isinstance(config.slug, str) else ""
+    municipality_id = (
+        config.municipality_id.strip()
+        if isinstance(config.municipality_id, str)
+        else ""
+    )
+    identity = slug or municipality_id or "<unknown>"
 
     required_text_fields = (
         "municipality_id",
