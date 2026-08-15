@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
+import csv
 import io
 import json
 from pathlib import Path
@@ -36,7 +37,9 @@ from pilot.source_provenance import (
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 GENERATED_MUNICIPALITIES_ROOT = PROJECT_ROOT / "generated" / "municipalities"
+ARCHIVED_MUNICIPALITIES_ROOT = PROJECT_ROOT / "generated" / "archived_municipalities"
 GENERATED_MANIFEST_NAME = "manifest.json"
+GENERATED_METADATA_NAME = "package_metadata.json"
 
 KNOWN_TREATMENTS = frozenset({
     "Not Assigned",
@@ -82,6 +85,41 @@ class GeneratedMunicipalityPackage:
     canonical_review_path: Path
     review: OnboardingReview
     runtime_launchable: bool
+
+
+@dataclass(frozen=True)
+class MunicipalityPortfolioEntry:
+    """Cheap, display-ready metadata for one permanent or generated municipality."""
+
+    slug: str
+    formal_name: str
+    short_name: str
+    entity_type: str
+    data_status: str
+    source_type: str
+    package_type: str
+    scenario_catalog_id: str
+    road_count: int | None
+    generated_date: str | None
+    permanent: bool
+    archived: bool
+    readiness_state: str
+    validation_summary: str
+    package_path: Path
+    manifest_path: Path | None
+    manifest_version: int | None
+    config: MunicipalityConfig | None
+
+    @property
+    def dashboard_launchable(self) -> bool:
+        return not self.archived and (
+            self.permanent
+            or (
+                self.config is not None
+                and self.config.inventory_adapter == "canonical_demo"
+                and self.config.normalized_data_status == "illustrative"
+            )
+        )
 
 
 def suggest_municipality_slug(value: str) -> str:
@@ -165,6 +203,7 @@ def assert_slug_available(
     slug: str,
     *,
     generated_root: Path = GENERATED_MUNICIPALITIES_ROOT,
+    archived_root: Path | None = None,
 ) -> Path:
     """Reject permanent or generated slug collisions before any write."""
 
@@ -177,7 +216,46 @@ def assert_slug_available(
         raise ValueError(
             f"Generated municipality slug '{slug}' already exists at '{destination}'."
         )
+    archive = archived_root
+    if archive is None and generated_root.resolve() == GENERATED_MUNICIPALITIES_ROOT.resolve():
+        archive = ARCHIVED_MUNICIPALITIES_ROOT
+    if archive is not None and _package_directory(slug, archive).exists():
+        raise ValueError(
+            f"Generated municipality slug '{slug}' is archived and must be restored or "
+            "intentionally renamed before reuse."
+        )
     return destination
+
+
+def _csv_record_count(path: Path) -> int | None:
+    """Count CSV data records without loading the municipality inventory pipeline."""
+
+    try:
+        with path.open("r", encoding="utf-8-sig", newline="") as source:
+            rows = csv.reader(source)
+            next(rows)
+            return sum(1 for _ in rows)
+    except (OSError, StopIteration, UnicodeError, csv.Error):
+        return None
+
+
+def _generated_date(path: Path, metadata: Mapping[str, Any]) -> str | None:
+    value = metadata.get("created_at")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime).date().isoformat()
+    except OSError:
+        return None
+
+
+def _read_package_metadata(directory: Path) -> dict[str, Any]:
+    path = directory / GENERATED_METADATA_NAME
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 def generate_synthetic_canonical_inventory(
@@ -456,6 +534,26 @@ def _write_package(
             expected_data_status=config.normalized_data_status,
             municipality_slug=config.slug,
         )
+        metadata_path = destination / GENERATED_METADATA_NAME
+        metadata_path.write_text(
+            json.dumps(
+                {
+                    "metadata_version": 1,
+                    "slug": config.slug,
+                    "package_type": (
+                        "illustrative_demo"
+                        if config.inventory_adapter == "canonical_demo"
+                        else "real_import"
+                    ),
+                    "road_count": len(review.canonical),
+                    "validation_result": "PASS",
+                    "created_at": date.today().isoformat(),
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         return GeneratedMunicipalityPackage(
             config=config,
             manifest_path=manifest_path,
@@ -538,3 +636,279 @@ def list_generated_municipalities(
         if directory.is_dir() and manifest.is_file():
             configs.append(load_onboarding_manifest(manifest))
     return tuple(configs)
+
+
+def _permanent_portfolio_entries() -> list[MunicipalityPortfolioEntry]:
+    from pilot.municipality_registry import MUNICIPALITIES
+
+    entries = []
+    for slug, config in MUNICIPALITIES.items():
+        entries.append(MunicipalityPortfolioEntry(
+            slug=slug,
+            formal_name=config.formal_name,
+            short_name=config.short_name,
+            entity_type=config.entity_type,
+            data_status=config.normalized_data_status,
+            source_type="Permanent registry",
+            package_type="registered",
+            scenario_catalog_id=config.scenario_catalog_id,
+            road_count=_csv_record_count(config.data_path),
+            generated_date=None,
+            permanent=True,
+            archived=False,
+            readiness_state="Permanent / Registered",
+            validation_summary="Registered configuration",
+            package_path=config.data_directory,
+            manifest_path=(
+                config.data_directory / GENERATED_MANIFEST_NAME
+                if config.onboarding_manifest_version is not None
+                else None
+            ),
+            manifest_version=config.onboarding_manifest_version,
+            config=config,
+        ))
+    return entries
+
+
+def _generated_portfolio_entry(
+    directory: Path,
+    *,
+    archived: bool,
+) -> MunicipalityPortfolioEntry:
+    manifest = directory / GENERATED_MANIFEST_NAME
+    metadata = _read_package_metadata(directory)
+    try:
+        config = load_onboarding_manifest(manifest)
+        if config.slug != directory.name:
+            raise ValueError(
+                f"Manifest slug '{config.slug}' does not match package directory "
+                f"'{directory.name}'."
+            )
+        illustrative_demo = config.inventory_adapter == "canonical_demo"
+        if archived and not (
+            illustrative_demo and config.normalized_data_status == "illustrative"
+        ):
+            raise ValueError("Only illustrative demo packages may be archived.")
+        if archived:
+            readiness = "Archived Generated Demo"
+        elif illustrative_demo and config.normalized_data_status == "illustrative":
+            readiness = "Generated Illustrative Demo"
+        else:
+            readiness = "Real Import — Ready for Registration"
+        cached_count = metadata.get("road_count")
+        road_count = (
+            cached_count
+            if isinstance(cached_count, int) and not isinstance(cached_count, bool)
+            and cached_count >= 0
+            else _csv_record_count(config.data_path)
+        )
+        return MunicipalityPortfolioEntry(
+            slug=config.slug,
+            formal_name=config.formal_name,
+            short_name=config.short_name,
+            entity_type=config.entity_type,
+            data_status=config.normalized_data_status,
+            source_type=(
+                "Synthetic demo generator" if illustrative_demo else "Municipality import"
+            ),
+            package_type="illustrative_demo" if illustrative_demo else "real_import",
+            scenario_catalog_id=config.scenario_catalog_id,
+            road_count=road_count,
+            generated_date=_generated_date(manifest, metadata),
+            permanent=False,
+            archived=archived,
+            readiness_state=readiness,
+            validation_summary=str(metadata.get("validation_result", "Manifest valid")),
+            package_path=directory,
+            manifest_path=manifest,
+            manifest_version=config.onboarding_manifest_version,
+            config=config,
+        )
+    except (
+        AttributeError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+    ) as exc:
+        raw: dict[str, Any] = {}
+        try:
+            candidate = json.loads(manifest.read_text(encoding="utf-8"))
+            if isinstance(candidate, dict):
+                raw = candidate
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            pass
+        return MunicipalityPortfolioEntry(
+            slug=directory.name,
+            formal_name=str(raw.get("formal_name") or directory.name),
+            short_name=str(raw.get("short_name") or raw.get("formal_name") or directory.name),
+            entity_type=str(raw.get("entity_type") or "unknown"),
+            data_status=str(raw.get("data_status") or "unknown"),
+            source_type="Generated package",
+            package_type=str(metadata.get("package_type") or "unknown"),
+            scenario_catalog_id=str(raw.get("scenario_catalog_id") or "unknown"),
+            road_count=(
+                metadata.get("road_count")
+                if isinstance(metadata.get("road_count"), int)
+                else None
+            ),
+            generated_date=_generated_date(manifest, metadata),
+            permanent=False,
+            archived=archived,
+            readiness_state="Validation Required",
+            validation_summary=str(exc),
+            package_path=directory,
+            manifest_path=manifest if manifest.exists() else None,
+            manifest_version=(
+                raw.get("manifest_version")
+                if isinstance(raw.get("manifest_version"), int)
+                else None
+            ),
+            config=None,
+        )
+
+
+def build_municipality_portfolio(
+    *,
+    generated_root: Path = GENERATED_MUNICIPALITIES_ROOT,
+    archived_root: Path = ARCHIVED_MUNICIPALITIES_ROOT,
+    include_archived: bool = False,
+) -> tuple[MunicipalityPortfolioEntry, ...]:
+    """Build portfolio metadata without loading or enriching every inventory."""
+
+    entries = _permanent_portfolio_entries()
+    roots = [(generated_root, False)]
+    if include_archived:
+        roots.append((archived_root, True))
+    for root, archived in roots:
+        if not root.is_dir():
+            continue
+        for directory in sorted(root.iterdir()):
+            if directory.is_dir():
+                entries.append(_generated_portfolio_entry(directory, archived=archived))
+    return tuple(sorted(entries, key=lambda item: (item.formal_name.lower(), item.slug)))
+
+
+def filter_municipality_portfolio(
+    entries: Sequence[MunicipalityPortfolioEntry],
+    *,
+    search: str = "",
+    entity_types: Sequence[str] = (),
+    data_statuses: Sequence[str] = (),
+    source_scopes: Sequence[str] = (),
+    readiness_states: Sequence[str] = (),
+) -> tuple[MunicipalityPortfolioEntry, ...]:
+    """Apply cheap in-memory portfolio search and filters."""
+
+    query = search.strip().lower()
+    entity_filter = set(entity_types)
+    status_filter = set(data_statuses)
+    source_filter = set(source_scopes)
+    readiness_filter = set(readiness_states)
+    filtered = []
+    for entry in entries:
+        scope = "Permanent" if entry.permanent else (
+            "Archived" if entry.archived else "Generated"
+        )
+        if query and query not in f"{entry.formal_name} {entry.short_name} {entry.slug}".lower():
+            continue
+        if entity_filter and entry.entity_type not in entity_filter:
+            continue
+        if status_filter and entry.data_status not in status_filter:
+            continue
+        if source_filter and scope not in source_filter:
+            continue
+        if readiness_filter and entry.readiness_state not in readiness_filter:
+            continue
+        filtered.append(entry)
+    return tuple(filtered)
+
+
+def archive_generated_demo(
+    slug: str,
+    *,
+    generated_root: Path = GENERATED_MUNICIPALITIES_ROOT,
+    archived_root: Path = ARCHIVED_MUNICIPALITIES_ROOT,
+) -> Path:
+    """Move one validated illustrative demo into recoverable archive storage."""
+
+    from pilot.municipality_registry import MUNICIPALITIES
+
+    if slug in MUNICIPALITIES:
+        raise ValueError(f"Permanent municipality '{slug}' cannot be archived.")
+    source = _package_directory(slug, generated_root)
+    destination = _package_directory(slug, archived_root)
+    if not source.is_dir():
+        raise ValueError(f"Generated municipality '{slug}' is not available to archive.")
+    if destination.exists():
+        raise ValueError(f"Archived municipality slug '{slug}' already exists.")
+    config = load_onboarding_manifest(source / GENERATED_MANIFEST_NAME)
+    if config.slug != slug:
+        raise ValueError(f"Generated package manifest does not match slug '{slug}'.")
+    if not (
+        config.inventory_adapter == "canonical_demo"
+        and config.normalized_data_status == "illustrative"
+    ):
+        raise ValueError("Only generated illustrative demo packages may be archived.")
+    archived_root.mkdir(parents=True, exist_ok=True)
+    source.replace(destination)
+    return destination
+
+
+def restore_archived_demo(
+    slug: str,
+    *,
+    generated_root: Path = GENERATED_MUNICIPALITIES_ROOT,
+    archived_root: Path = ARCHIVED_MUNICIPALITIES_ROOT,
+) -> Path:
+    """Restore one archived illustrative demo to the active generated area."""
+
+    from pilot.municipality_registry import MUNICIPALITIES
+
+    if slug in MUNICIPALITIES:
+        raise ValueError(f"Permanent municipality slug '{slug}' cannot be restored.")
+    source = _package_directory(slug, archived_root)
+    destination = _package_directory(slug, generated_root)
+    if not source.is_dir():
+        raise ValueError(f"Archived municipality '{slug}' is not available to restore.")
+    if destination.exists():
+        raise ValueError(f"Generated municipality slug '{slug}' already exists.")
+    config = load_onboarding_manifest(source / GENERATED_MANIFEST_NAME)
+    if config.slug != slug or config.inventory_adapter != "canonical_demo" or (
+        config.normalized_data_status != "illustrative"
+    ):
+        raise ValueError("Only archived illustrative demo packages may be restored.")
+    generated_root.mkdir(parents=True, exist_ok=True)
+    source.replace(destination)
+    return destination
+
+
+def clone_illustrative_demo(
+    source_slug: str,
+    identity: MunicipalityIdentity,
+    *,
+    road_count: int | None = None,
+    generated_root: Path = GENERATED_MUNICIPALITIES_ROOT,
+) -> GeneratedMunicipalityPackage:
+    """Regenerate an illustrative demo under a new identity and slug."""
+
+    source = load_generated_municipality(source_slug, generated_root=generated_root)
+    if not (
+        source.inventory_adapter == "canonical_demo"
+        and source.normalized_data_status == "illustrative"
+    ):
+        raise ValueError("Only generated illustrative demo packages may be cloned.")
+    count = road_count
+    if count is None:
+        metadata = _read_package_metadata(_package_directory(source_slug, generated_root))
+        cached_count = metadata.get("road_count")
+        count = cached_count if isinstance(cached_count, int) else _csv_record_count(source.data_path)
+    if count is None:
+        raise ValueError(f"Could not determine road count for generated demo '{source_slug}'.")
+    review = review_illustrative_demo(
+        identity,
+        road_count=count,
+        generated_root=generated_root,
+    )
+    return create_illustrative_demo_package(review, generated_root=generated_root)

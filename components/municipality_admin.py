@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from datetime import date
 import io
 
@@ -22,9 +23,9 @@ from pilot.municipality_admin import (
     suggest_municipality_slug,
 )
 from pilot.municipality_config import SUPPORTED_ENTITY_TYPES
-from pilot.municipality_data import load_municipality_inventory
 from pilot.municipality_registry import MUNICIPALITIES
 from pilot.municipality_scenarios import SCENARIO_CATALOGS
+from components.municipality_portfolio import render_municipality_portfolio
 
 
 _UNMAPPED = "— Not mapped —"
@@ -363,8 +364,11 @@ def _render_real_import() -> None:
 
 def _safe_inventory_count(config) -> str:
     try:
-        return str(len(load_municipality_inventory(config)))
-    except (OSError, TypeError, ValueError):
+        with config.data_path.open("r", encoding="utf-8-sig", newline="") as source:
+            rows = csv.reader(source)
+            next(rows)
+            return str(sum(1 for _ in rows))
+    except (OSError, StopIteration, UnicodeError, csv.Error):
         return "Unavailable"
 
 
@@ -411,7 +415,7 @@ def render_municipality_admin() -> None:
         [
             "Create Illustrative Demo",
             "Import Municipality Data",
-            "View Existing Municipalities",
+            "Municipality Portfolio",
         ],
         horizontal=True,
     )
@@ -420,4 +424,4 @@ def render_municipality_admin() -> None:
     elif mode == "Import Municipality Data":
         _render_real_import()
     else:
-        _render_existing_municipalities()
+        render_municipality_portfolio()

@@ -10,14 +10,19 @@ from pilot.canonical_inventory import CANONICAL_COLUMNS, validate_canonical_sche
 from pilot.municipality_admin import (
     GENERATED_MUNICIPALITIES_ROOT,
     MunicipalityIdentity,
+    archive_generated_demo,
     assert_slug_available,
+    build_municipality_portfolio,
+    clone_illustrative_demo,
     create_illustrative_demo_package,
     create_real_import_package,
     generate_synthetic_canonical_inventory,
+    filter_municipality_portfolio,
     list_generated_municipalities,
     load_generated_municipality,
     review_illustrative_demo,
     review_real_import,
+    restore_archived_demo,
     suggest_column_mappings,
     suggest_municipality_slug,
 )
@@ -139,6 +144,7 @@ class MunicipalityAdminTests(unittest.TestCase):
 
             self.assertTrue(first.manifest_path.is_file())
             self.assertTrue(first.canonical_review_path.is_file())
+            self.assertTrue((first.manifest_path.parent / "package_metadata.json").is_file())
             self.assertTrue(first.runtime_launchable)
             self.assertEqual(len(list_generated_municipalities(generated_root=root)), 2)
             loaded = load_generated_municipality("runtime_demo_one", generated_root=root)
@@ -185,6 +191,146 @@ class MunicipalityAdminTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "must use illustrative"):
                 create_illustrative_demo_package(unsafe, generated_root=Path(directory_name))
 
+    def test_portfolio_combines_registered_and_generated_metadata_without_inventory_loading(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            active = Path(directory_name) / "active"
+            archived = Path(directory_name) / "archive"
+            review = review_illustrative_demo(
+                _identity("portfolio_demo", "Portfolio Demo"),
+                road_count=7,
+                generated_root=active,
+            )
+            create_illustrative_demo_package(review, generated_root=active)
+            entries = build_municipality_portfolio(
+                generated_root=active,
+                archived_root=archived,
+            )
+            permanent = next(entry for entry in entries if entry.slug == "jackson")
+            generated = next(entry for entry in entries if entry.slug == "portfolio_demo")
+            self.assertEqual(permanent.readiness_state, "Permanent / Registered")
+            self.assertTrue(permanent.permanent)
+            self.assertGreater(permanent.road_count, 0)
+            self.assertEqual(generated.readiness_state, "Generated Illustrative Demo")
+            self.assertEqual(generated.road_count, 7)
+            self.assertFalse(generated.permanent)
+            self.assertTrue(generated.dashboard_launchable)
+            self.assertEqual(generated.validation_summary, "PASS")
+
+            filtered = filter_municipality_portfolio(
+                entries,
+                search="portfolio",
+                source_scopes=["Generated"],
+                readiness_states=["Generated Illustrative Demo"],
+            )
+            self.assertEqual([entry.slug for entry in filtered], ["portfolio_demo"])
+
+    def test_invalid_generated_manifest_is_visible_as_validation_required(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            active = Path(directory_name) / "active"
+            invalid = active / "broken_demo"
+            invalid.mkdir(parents=True)
+            (invalid / "manifest.json").write_text(
+                '{"slug": "broken_demo", "formal_name": "Broken Demo"}',
+                encoding="utf-8",
+            )
+            entries = build_municipality_portfolio(generated_root=active)
+            broken = next(entry for entry in entries if entry.slug == "broken_demo")
+            self.assertEqual(broken.readiness_state, "Validation Required")
+            self.assertIsNone(broken.config)
+            self.assertIn("manifest", broken.validation_summary.lower())
+
+    def test_archive_restore_and_path_safeguards_are_recoverable(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            active = Path(directory_name) / "active"
+            archived = Path(directory_name) / "archive"
+            review = review_illustrative_demo(
+                _identity("archive_demo", "Archive Demo"),
+                generated_root=active,
+            )
+            create_illustrative_demo_package(review, generated_root=active)
+            destination = archive_generated_demo(
+                "archive_demo", generated_root=active, archived_root=archived
+            )
+            self.assertTrue(destination.is_dir())
+            self.assertFalse((active / "archive_demo").exists())
+            with self.assertRaisesRegex(ValueError, "is archived"):
+                assert_slug_available(
+                    "archive_demo", generated_root=active, archived_root=archived
+                )
+            hidden = build_municipality_portfolio(
+                generated_root=active, archived_root=archived
+            )
+            self.assertNotIn("archive_demo", {entry.slug for entry in hidden})
+            visible = build_municipality_portfolio(
+                generated_root=active, archived_root=archived, include_archived=True
+            )
+            archived_entry = next(entry for entry in visible if entry.slug == "archive_demo")
+            self.assertEqual(archived_entry.readiness_state, "Archived Generated Demo")
+            self.assertFalse(archived_entry.dashboard_launchable)
+            restored = restore_archived_demo(
+                "archive_demo", generated_root=active, archived_root=archived
+            )
+            self.assertEqual(restored, active / "archive_demo")
+            self.assertTrue(restored.is_dir())
+            with self.assertRaisesRegex(ValueError, "normalized"):
+                archive_generated_demo(
+                    "../archive_demo", generated_root=active, archived_root=archived
+                )
+            with self.assertRaisesRegex(ValueError, "Permanent municipality"):
+                archive_generated_demo(
+                    "jackson", generated_root=active, archived_root=archived
+                )
+
+    def test_real_import_cannot_be_archived_or_cloned_as_demo(self):
+        source = ONBOARDING_DEMO_MUNICIPALITY.data_path.read_bytes()
+        mapping = dict(ONBOARDING_DEMO_MUNICIPALITY.source_column_mapping)
+        mapping.pop("Source_Status")
+        with tempfile.TemporaryDirectory() as directory_name:
+            active = Path(directory_name) / "active"
+            archived = Path(directory_name) / "archive"
+            review = review_real_import(
+                _identity("real_lifecycle", "Real Lifecycle"),
+                source,
+                mapping=mapping,
+                defaults={},
+                data_status="provisional",
+                source_owner="Road office",
+                acquired_date="2026-08-15",
+                source_reference="delivery.csv",
+                generated_root=active,
+            )
+            create_real_import_package(review, source, generated_root=active)
+            with self.assertRaisesRegex(ValueError, "illustrative demo"):
+                archive_generated_demo(
+                    "real_lifecycle", generated_root=active, archived_root=archived
+                )
+            with self.assertRaisesRegex(ValueError, "illustrative demo"):
+                clone_illustrative_demo(
+                    "real_lifecycle",
+                    _identity("unsafe_clone", "Unsafe Clone"),
+                    generated_root=active,
+                )
+
+    def test_clone_regenerates_synthetic_inventory_under_new_identity(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            active = Path(directory_name) / "active"
+            review = review_illustrative_demo(
+                _identity("clone_source", "Clone Source"),
+                road_count=9,
+                generated_root=active,
+            )
+            create_illustrative_demo_package(review, generated_root=active)
+            clone = clone_illustrative_demo(
+                "clone_source",
+                _identity("clone_target", "Clone Target"),
+                generated_root=active,
+            )
+            roads = load_municipality_inventory(clone.config)
+            self.assertEqual(clone.config.formal_name, "Clone Target")
+            self.assertEqual(clone.config.normalized_data_status, "illustrative")
+            self.assertEqual(len(roads), 9)
+            self.assertTrue(roads["jurisdiction"].eq("Clone Target").all())
+
     def test_operator_page_landing_and_demo_creation(self):
         from streamlit.testing.v1 import AppTest
 
@@ -206,7 +352,7 @@ class MunicipalityAdminTests(unittest.TestCase):
                 [
                     "Create Illustrative Demo",
                     "Import Municipality Data",
-                    "View Existing Municipalities",
+                    "Municipality Portfolio",
                 ],
             )
             app.text_input(key="demo_formal_name").set_value("AppTest Runtime Demo")
@@ -235,6 +381,28 @@ class MunicipalityAdminTests(unittest.TestCase):
         self.assertTrue(any(item.value == "Import Municipality Data" for item in app.header))
         self.assertEqual(app.selectbox(key="import_status").value, "provisional")
         self.assertTrue(any(item.label == "Upload municipality road inventory CSV" for item in app.get("file_uploader")))
+
+    def test_operator_portfolio_lists_filters_and_shows_details(self):
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_file(
+            "pages/1_Municipality_Onboarding.py", default_timeout=30
+        ).run()
+        app.radio[0].set_value("Municipality Portfolio").run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any(item.value == "Municipality Portfolio" for item in app.header))
+        self.assertTrue(any("Showing 4 of 4" in item.value for item in app.get("markdown")))
+        app.text_input(key="portfolio_search").set_value("jackson").run()
+        self.assertTrue(any("Showing 1 of 4" in item.value for item in app.get("markdown")))
+        app.selectbox(key="portfolio_selected").set_value("City of Jackson — jackson").run()
+        self.assertFalse(app.exception)
+        self.assertTrue(
+            any(item.value == "Municipality details: City of Jackson" for item in app.subheader)
+        )
+        self.assertEqual(
+            [tab.label for tab in app.tabs],
+            ["Overview", "Provenance", "Validation Summary", "Manifest"],
+        )
 
     def test_registered_municipality_can_be_selected_without_environment_variable(self):
         from streamlit.testing.v1 import AppTest
