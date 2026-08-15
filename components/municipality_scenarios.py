@@ -7,30 +7,63 @@ from collections.abc import Mapping
 import streamlit as st
 
 
+def resolve_municipality_scenario_name(
+    scenarios: Mapping[str, dict],
+    selected_scenario: str | None = None,
+) -> str:
+    """Resolve a configured scenario without changing scenario definitions."""
+
+    if not scenarios:
+        raise ValueError("Scenario selection requires at least one configured scenario.")
+    default_scenario = "Balanced Annual Program"
+    if selected_scenario in scenarios:
+        return str(selected_scenario)
+    if default_scenario in scenarios:
+        return default_scenario
+    return next(iter(scenarios))
+
+
 def render_municipality_scenario_selector(
     scenarios: Mapping[str, dict],
     session_key: str = "municipality_scenario",
+    selection_state_key: str = "paventra_selected_scenario",
 ) -> str:
-    st.subheader("4. Budget scenario")
+    st.subheader("2. Investment strategy")
     scenario_names = list(scenarios)
-    default_scenario = "Balanced Annual Program"
-    selected_scenario = st.session_state.get(session_key, default_scenario)
-    if selected_scenario not in scenarios:
-        selected_scenario = default_scenario if default_scenario in scenarios else scenario_names[0]
+    selected_scenario = resolve_municipality_scenario_name(
+        scenarios,
+        st.session_state.get(session_key),
+    )
     scenario_name = st.radio(
-        "Choose an illustrative investment strategy",
+        "Choose an investment strategy",
         scenario_names,
         index=scenario_names.index(selected_scenario),
         key=session_key,
         horizontal=True,
     )
-    st.caption(scenarios[scenario_name]["description"])
+    # Widget state is removed when its page is no longer rendered. Keep the
+    # selected application strategy available across Dashboard, Map, and Reports.
+    st.session_state[selection_state_key] = scenario_name
+    scenario = scenarios[scenario_name]
+    st.caption(
+        f"Scenario assumption · ${scenario['budget']:,.0f} planning budget · "
+        f"{scenario['description']}"
+    )
+    st.markdown('<div class="paventra-workflow-arrow">↓</div>', unsafe_allow_html=True)
     return scenario_name
 
 
-def render_municipality_scenario_impact(results: dict) -> None:
-    st.subheader(results["scenario_name"])
-    st.caption("Planning estimate based on the current illustrative records and selected projects.")
+def render_municipality_scenario_impact(
+    results: dict,
+    analysis_label: str | None = None,
+) -> None:
+    st.subheader("4. Expected program impact")
+    st.markdown(f"**{results['scenario_name']}**")
+    basis = analysis_label or "Current configured inventory"
+    st.caption(
+        f"Calculated planning estimate based on {basis.lower()} and the selected projects; "
+        "it is not a machine-learning prediction or engineering forecast."
+    )
     metrics = [
         ("Budget", f"${results['scenario']['budget']:,.0f}"),
         ("Projects", len(results["roads"])),

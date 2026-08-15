@@ -32,8 +32,8 @@ def add_standard_marker(cluster, road, popup):
         ),
     ).add_to(cluster)
 
-def add_ai_marker(cluster, road, popup):
-    """Render an AI-selected road marker."""
+def add_priority_marker(cluster, road, popup):
+    """Render a scenario-funded priority road marker."""
 
     color = risk_color(road["Risk Score"])
 
@@ -63,3 +63,7 @@ def add_ai_marker(cluster, road, popup):
             color="orange",
         ),
     ).add_to(cluster)
+
+
+# Compatibility alias for older GIS callers. The active UI uses neutral wording.
+add_ai_marker = add_priority_marker

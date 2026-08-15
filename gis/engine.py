@@ -12,7 +12,7 @@ from gis.basemaps import add_basemaps
 from gis.geometry_manager import GeometryManager
 from gis.legend import add_legend
 from gis.markers import (
-    add_ai_marker,
+    add_priority_marker,
     add_standard_marker,
 )
 from gis.popups import build_popup
@@ -86,8 +86,8 @@ def create_network_map(
         show=True,
     )
 
-    ai_layer = folium.FeatureGroup(
-        name="AI Recommendations",
+    priority_layer = folium.FeatureGroup(
+        name="Priority Projects",
         show=True,
     )
 
@@ -100,8 +100,8 @@ def create_network_map(
         road_layer
     )
 
-    ai_cluster = MarkerCluster().add_to(
-        ai_layer
+    priority_cluster = MarkerCluster().add_to(
+        priority_layer
     )
 
     # -------------------------------------------------
@@ -129,8 +129,8 @@ def create_network_map(
 
         if road_id in selected_lookup:
 
-            add_ai_marker(
-                ai_cluster,
+            add_priority_marker(
+                priority_cluster,
                 road,
                 popup,
             )
@@ -198,7 +198,7 @@ def create_network_map(
         road_map
     )
 
-    ai_layer.add_to(
+    priority_layer.add_to(
         road_map
     )
 

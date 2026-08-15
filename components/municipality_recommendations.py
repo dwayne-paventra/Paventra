@@ -14,7 +14,7 @@ def render_municipality_recommendations(
     st.subheader("3. Recommended investments")
     st.caption(
         f"What should {config.short_name} fund first? Rank reflects "
-        "the selected strategy, current risk score, and available budget."
+        "the selected strategy, calculated risk score, and available planning budget."
     )
     roads = results["roads"]
     if roads.empty:
@@ -33,7 +33,8 @@ def render_municipality_recommendations(
     })
     st.dataframe(
         table.style.format({"Cost": "${:,.0f}", "PCI": "{:.0f}", "Risk": "{:.0f}"}),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
+    st.markdown('<div class="paventra-workflow-arrow">↓</div>', unsafe_allow_html=True)
     st.divider()

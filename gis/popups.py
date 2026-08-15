@@ -1,90 +1,52 @@
-"""
-Popup builder for Paventra GIS.
-"""
+"""Presentation-ready popup builder for the Paventra network map."""
 
 from __future__ import annotations
+
+from html import escape
 
 import pandas as pd
 
 
 def build_popup(road: pd.Series) -> str:
-    """
-    Build the HTML popup for a road.
-    """
+    """Build a concise, escaped segment summary for a map marker."""
 
-    pci = road.get("PCI", "Not available")
-    risk_reason = road.get("Risk Reason", "Risk factors are not available.")
     estimated_cost = road.get("Estimated Cost")
     priority_rank = road.get("Priority Rank")
-    cost_display = f"${float(estimated_cost):,.0f}" if pd.notna(estimated_cost) else "Not available"
-    priority_display = f"#{int(priority_rank)}" if pd.notna(priority_rank) else "Not currently recommended"
+    cost_display = (
+        f"${float(estimated_cost):,.0f}"
+        if pd.notna(estimated_cost)
+        else "Not available"
+    )
+    priority_display = (
+        f"#{int(priority_rank)}"
+        if pd.notna(priority_rank)
+        else "Not funded in selected strategy"
+    )
+    road_name = escape(str(road["Road Name"]))
+    risk_level = escape(str(road["Risk Level"]))
+    treatment = escape(str(road["Treatment"]))
+    traffic = escape(str(road["Traffic"]))
+    surface = escape(str(road["Surface Type"]))
+    risk_reason = escape(
+        str(road.get("Risk Reason", "Risk factors are not available."))
+    )
 
     return f"""
-    <div style="width:260px">
-
-    <h3 style="margin-bottom:10px;">
-    🛣️ {road["Road Name"]}
-    </h3>
-
-    <hr>
-
-    <b>PCI</b><br>
-    {pci}
-
-    <br><br>
-
-    <b>Risk Level</b><br>
-    {road["Risk Level"]}
-
-    <br><br>
-
-    <b>Risk Score</b><br>
-    {road["Risk Score"]}
-
-    <br><br>
-
-    <b>Why it is a priority</b><br>
-    {risk_reason}
-
-    <br><br>
-
-    <b>Recommended Treatment</b><br>
-    {road["Treatment"]}
-
-    <br><br>
-
-    <b>Estimated Cost</b><br>
-    {cost_display}
-
-    <br><br>
-
-    <b>Priority Rank</b><br>
-    {priority_display}
-
-    <br><br>
-
-    <b>Traffic Level</b><br>
-    {road["Traffic"]}
-
-    <br><br>
-
-    <b>Average Daily Traffic (ADT)</b><br>
-    {road["ADT"]:,}
-
-    <br><br>
-
-    <b>Surface Type</b><br>
-    {road["Surface Type"]}
-
-    <br><br>
-
-    <b>Speed Limit</b><br>
-    {road["Speed Limit"]} mph
-
-    <br><br>
-
-    <b>Road Length</b><br>
-    {road["Road Length"]} miles
-
+    <div style="width:270px;font-family:Arial,sans-serif;color:#17324d">
+      <h3 style="margin:0 0 8px;color:#0b3c5d">{road_name}</h3>
+      <div style="font-size:12px;color:#52697a;margin-bottom:10px">Paventra segment summary</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tr><td><b>PCI</b></td><td>{float(road['PCI']):.0f}</td></tr>
+        <tr><td><b>Calculated risk</b></td><td>{float(road['Risk Score']):.0f} · {risk_level}</td></tr>
+        <tr><td><b>Priority rank</b></td><td>{priority_display}</td></tr>
+        <tr><td><b>Treatment</b></td><td>{treatment}</td></tr>
+        <tr><td><b>Planning cost</b></td><td>{cost_display}</td></tr>
+        <tr><td><b>Traffic</b></td><td>{traffic} · {float(road['ADT']):,.0f} ADT</td></tr>
+        <tr><td><b>Surface</b></td><td>{surface}</td></tr>
+        <tr><td><b>Length</b></td><td>{float(road['Road Length']):.2f} miles</td></tr>
+      </table>
+      <div style="margin-top:10px;padding:8px;background:#f3f7fa;border-radius:5px">
+        <b>Priority factors</b><br>{risk_reason}
+      </div>
     </div>
     """

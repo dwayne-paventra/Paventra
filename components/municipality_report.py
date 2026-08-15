@@ -10,7 +10,14 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    PageBreak,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 from pilot.municipality_config import MunicipalityConfig, validate_municipality_config
 from pilot.data_provenance import resolve_inventory_data_status
@@ -56,9 +63,16 @@ def build_municipality_report(
         "MunicipalityHeading",
         parent=styles["Heading2"],
         textColor=colors.HexColor("#0B3C5D"),
+        keepWithNext=True,
         spaceBefore=12,
     )
     body = styles["BodyText"]
+    table_body = ParagraphStyle(
+        "MunicipalityTableBody",
+        parent=body,
+        fontSize=7.5,
+        leading=9,
+    )
     validate_municipality_config(config)
     resolve_inventory_data_status(
         roads,
@@ -71,17 +85,17 @@ def build_municipality_report(
         if "data_updated_at" in roads.columns
         else "Unspecified dataset version"
     )
-    story = [Paragraph(f"Paventra | {config.pilot_name}", heading)]
-    story.append(Paragraph(municipality_report_title(config), title))
+    story = [Paragraph(f"Paventra | {escape(config.pilot_name)}", heading)]
+    story.append(Paragraph(escape(municipality_report_title(config)), title))
     story.append(Paragraph(
         f"{provenance.analysis_label} | Report date {date.today().isoformat()} | "
-        f"Data version {data_version} | Paventra Pilot v1.1",
+        f"Data version {escape(data_version)} | Paventra Pilot v1.2",
         body,
     ))
     story.append(Spacer(1, 12))
     story.append(Paragraph("Executive summary", heading))
     story.append(Paragraph(
-        f"The <b>{results['scenario_name']}</b> scenario considers a planning budget of "
+        f"The <b>{escape(results['scenario_name'])}</b> scenario considers a planning budget of "
         f"<b>${results['scenario']['budget']:,.0f}</b>. It recommends {len(results['roads'])} projects, "
         f"representing ${results['spent']:,.0f} in investment and an estimated "
         f"{results['risk_reduction_percent']:.0f}% reduction in portfolio risk.",
@@ -89,8 +103,14 @@ def build_municipality_report(
     ))
     story.append(Paragraph("Network condition", heading))
     metrics = [
+        ["Data status", provenance.label],
         ["Average PCI", f"{roads['PCI'].mean():.0f}"],
         ["High-risk segments", str(int((roads["Risk Level"] == "High").sum()))],
+        [
+            "High-risk lane miles",
+            f"{roads.loc[roads['Risk Level'] == 'High', 'Lane Miles'].sum():.1f}",
+        ],
+        ["Estimated investment need", f"${roads['Estimated Cost'].sum():,.0f}"],
         ["Lane miles treatable", f"{results['selected_lane_miles']:.1f}"],
         ["Portfolio risk", f"{results['network_risk_before']:.1f} to {results['network_risk_after']:.1f}"],
     ]
@@ -109,8 +129,8 @@ def build_municipality_report(
     for _, road in results["roads"].iterrows():
         investment_rows.append([
             str(int(road["Priority Rank"])),
-            road["Road Name"],
-            road["Treatment"],
+            Paragraph(escape(str(road["Road Name"])), table_body),
+            Paragraph(escape(str(road["Treatment"])), table_body),
             f"${road['Estimated Cost']:,.0f}",
             f"{road['PCI']:.0f}",
             f"{road['Risk Score']:.0f}",
@@ -118,7 +138,14 @@ def build_municipality_report(
     investment_table = Table(
         investment_rows,
         repeatRows=1,
-        colWidths=[0.45 * inch, 1.45 * inch, 1.25 * inch, 1.05 * inch, 0.5 * inch, 0.5 * inch],
+        colWidths=[
+            0.45 * inch,
+            2.1 * inch,
+            1.15 * inch,
+            1.05 * inch,
+            0.5 * inch,
+            0.5 * inch,
+        ],
     )
     investment_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#005EA2")),
@@ -130,12 +157,17 @@ def build_municipality_report(
         ("PADDING", (0, 0), (-1, -1), 5),
     ]))
     story.append(investment_table)
+    story.append(PageBreak())
     story.append(Paragraph("Why these roads are prioritized", heading))
-    for _, road in results["roads"].iterrows():
-        story.append(Paragraph(
-            f"<b>{int(road['Priority Rank'])}. {road['Road Name']}</b> - {road['Risk Reason']}",
-            body,
-        ))
+    if results["roads"].empty:
+        story.append(Paragraph("No projects fit within the selected planning budget.", body))
+    else:
+        for _, road in results["roads"].iterrows():
+            story.append(Paragraph(
+                f"<b>{int(road['Priority Rank'])}. {escape(str(road['Road Name']))}</b> - "
+                f"{escape(str(road['Risk Reason']))}",
+                body,
+            ))
     story.append(Paragraph("Scenario assumptions", heading))
     story.append(Paragraph(
         "Priorities use Paventra's transparent Phase 1 rules: PCI/condition, traffic exposure, "
@@ -150,7 +182,23 @@ def build_municipality_report(
         f"not an engineering determination or an {config.official_action_label}.",
         body,
     ))
-    doc.build(story)
+    def draw_footer(canvas, report_doc) -> None:
+        canvas.saveState()
+        canvas.setFillColor(colors.HexColor("#667d8d"))
+        canvas.setFont("Helvetica", 8)
+        canvas.drawString(
+            report_doc.leftMargin,
+            22,
+            f"Paventra decision briefing | {config.short_name}",
+        )
+        canvas.drawRightString(
+            letter[0] - report_doc.rightMargin,
+            22,
+            f"Page {report_doc.page}",
+        )
+        canvas.restoreState()
+
+    doc.build(story, onFirstPage=draw_footer, onLaterPages=draw_footer)
     return stream.getvalue()
 
 
@@ -163,11 +211,16 @@ def render_municipality_report(
     import streamlit as st
 
     st.subheader("Executive report")
-    st.caption(f"Download a concise briefing for discussion with {config.leadership_label}.")
+    filename = municipality_report_filename(config)
+    st.success("Executive PDF briefing is ready for review.")
+    st.caption(
+        f"Download a concise briefing for discussion with {config.leadership_label}. "
+        f"File: {filename}"
+    )
     st.download_button(
         "Download executive briefing (PDF)",
         data=report_bytes,
-        file_name=municipality_report_filename(config),
+        file_name=filename,
         mime="application/pdf",
         use_container_width=False,
     )

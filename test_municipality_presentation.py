@@ -111,7 +111,8 @@ class MunicipalityPresentationTests(unittest.TestCase):
             render_municipality_report(config, b"%PDF-demo")
 
         caption.assert_called_once_with(
-            "Download a concise briefing for discussion with road commission leadership."
+            "Download a concise briefing for discussion with road commission leadership. "
+            "File: demo_road_commission_transportation_investment_scenario.pdf"
         )
         self.assertEqual(
             download_button.call_args.kwargs["file_name"],

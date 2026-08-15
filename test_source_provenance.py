@@ -244,7 +244,8 @@ class SourceProvenanceTests(unittest.TestCase):
         captured_story = []
 
         class CapturingDocument:
-            def build(self, story):
+            def build(self, story, **page_callbacks):
+                self.page_callbacks = page_callbacks
                 captured_story.extend(story)
 
         with patch(

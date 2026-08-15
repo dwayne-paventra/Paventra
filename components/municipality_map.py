@@ -16,13 +16,33 @@ def render_municipality_map(
     selection_key: str = "municipality_road_selection",
 ) -> None:
     st.subheader("2. Risk and network map")
-    st.caption("Colored markers show current risk. Starred markers are priority investment recommendations.")
+    st.caption(
+        f"{len(roads)} inventory segments centered on {config.short_name}. "
+        "Marker color shows calculated risk; starred markers are projects funded by the selected strategy."
+    )
+    if config.normalized_data_status == "illustrative":
+        st.info(
+            "Illustrative map: road records and coordinates are demonstration inputs, "
+            "not an official agency GIS inventory."
+        )
 
-    road_names = roads["Road Name"].tolist()
-    selected_name = st.selectbox("Select a road to review", road_names, key=selection_key)
-    selected_road = roads.loc[roads["Road Name"] == selected_name].iloc[0]
+    road_positions = list(range(len(roads)))
+
+    def road_label(position: int) -> str:
+        road = roads.iloc[position]
+        limits = [str(road.get(field, "")).strip() for field in ("from_street", "to_street")]
+        limits = [value for value in limits if value and value.lower() != "nan"]
+        suffix = f" · {' to '.join(limits)}" if limits else f" · Segment {road['Road ID']}"
+        return f"{road['Road Name']}{suffix}"
+
+    selected_position = st.selectbox(
+        "Select a road to review",
+        road_positions,
+        format_func=road_label,
+        key=selection_key,
+    )
+    selected_road = roads.iloc[int(selected_position)]
     selected_ids = set(results["selected_ids"])
-    selected_ids.add(str(selected_road["Road ID"]))
 
     map_roads = roads.copy()
     rank_lookup = results["roads"].set_index("Road ID")["Priority Rank"].to_dict() if not results["roads"].empty else {}
@@ -40,12 +60,17 @@ def render_municipality_map(
             "Map imagery is unavailable. The selected-road details and investment recommendations remain available for this review."
         )
 
-    st.markdown("#### Selected road")
-    detail_columns = st.columns(2)
-    detail_columns[0].metric("PCI", f"{selected_road['PCI']:.0f}")
-    detail_columns[1].metric("Risk score", f"{selected_road['Risk Score']:.0f}")
-    detail_columns = st.columns(2)
-    detail_columns[0].metric("Recommended treatment", selected_road["Treatment"])
-    detail_columns[1].metric("Estimated cost", f"${selected_road['Estimated Cost']:,.0f}")
-    st.info(f"Why it is a priority: {selected_road['Risk Reason']}")
+    with st.container(border=True):
+        st.markdown(f"#### {selected_road['Road Name']}")
+        st.caption(
+            f"Segment {selected_road.get('segment_id', selected_road['Road ID'])} · "
+            f"{selected_road['Lane Miles']:.1f} lane miles · "
+            f"{selected_road['Traffic']} traffic"
+        )
+        detail_columns = st.columns(4)
+        detail_columns[0].metric("PCI", f"{selected_road['PCI']:.0f}")
+        detail_columns[1].metric("Calculated Risk", f"{selected_road['Risk Score']:.0f}")
+        detail_columns[2].metric("Treatment", selected_road["Treatment"])
+        detail_columns[3].metric("Planning Cost", f"${selected_road['Estimated Cost']:,.0f}")
+        st.info(f"Priority factors: {selected_road['Risk Reason']}")
     st.divider()

@@ -1,4 +1,5 @@
 from pathlib import Path
+from html import escape
 
 from PIL import Image
 import streamlit as st
@@ -99,6 +100,22 @@ def render_sidebar(
             margin: 1.1rem 0 0.4rem;
             text-transform: uppercase;
         }
+        [data-testid="stSidebar"] .paventra-agency-card {
+            background: rgba(255,255,255,.09);
+            border: 1px solid rgba(255,255,255,.18);
+            border-radius: 8px;
+            color: #ffffff;
+            font-size: .9rem;
+            font-weight: 700;
+            line-height: 1.3;
+            margin: .8rem 0 .25rem;
+            overflow-wrap: anywhere;
+            padding: .65rem .7rem;
+        }
+        [data-testid="stSidebar"] .stButton button p {
+            text-align: left;
+            width: 100%;
+        }
         [data-testid="stSidebar"] button[kind="secondary"] {
             background: #173f5f;
             border-color: #315f7c;
@@ -122,10 +139,13 @@ def render_sidebar(
         logo_path = Path(__file__).resolve().parents[1] / "assets" / "logo.png"
         st.image(Image.open(logo_path), width=140)
         st.markdown("## Paventra")
-        st.caption("AI-Powered Road Intelligence")
+        st.caption("Road Investment Intelligence")
 
         if pilot_mode and pilot_title:
-            st.markdown(f"**{pilot_title}**")
+            st.markdown(
+                f'<div class="paventra-agency-card">{escape(pilot_title)}</div>',
+                unsafe_allow_html=True,
+            )
         if pilot_mode and pilot_notice:
             st.info(pilot_notice)
 

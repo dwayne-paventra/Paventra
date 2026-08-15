@@ -97,6 +97,11 @@ def render_municipality_pilot() -> None:
         render_sidebar,
     )
     from components.municipality_executive import render_municipality_executive_overview
+    from components.municipality_presentation import (
+        render_municipality_section_header,
+        render_network_snapshot,
+        summarize_network_for_presentation,
+    )
 
     active_section = st.session_state.get(
         "paventra_dashboard_section",
@@ -124,22 +129,28 @@ def render_municipality_pilot() -> None:
         DASHBOARD_RUNTIME_SLUG,
     )
 
-    if active_section == "Dashboard":
-        render_municipality_executive_overview(DASHBOARD_MUNICIPALITY, municipality_roads)
-        if st.button("Open investment briefing", key="municipality_open_briefing"):
-            navigate_to_section("Pavement Analytics", current_section=active_section)
-        return
-
     from pilot.municipality_scenarios import get_scenario_catalog
     from components.municipality_assumptions import render_municipality_assumptions
     from components.municipality_recommendations import render_municipality_recommendations
     from components.municipality_scenarios import (
         render_municipality_scenario_impact,
         render_municipality_scenario_selector,
+        resolve_municipality_scenario_name,
     )
 
     scenario_catalog = get_scenario_catalog(DASHBOARD_MUNICIPALITY.scenario_catalog_id)
-    selected_scenario = render_municipality_scenario_selector(scenario_catalog)
+    scenario_candidate = (
+        st.session_state.get("municipality_scenario")
+        if active_section == "Pavement Analytics"
+        else st.session_state.get(
+            "paventra_selected_scenario",
+            st.session_state.get("municipality_scenario"),
+        )
+    )
+    selected_scenario = resolve_municipality_scenario_name(
+        scenario_catalog,
+        scenario_candidate,
+    )
     assumptions_version = json.dumps(scenario_catalog, sort_keys=True)
     municipality_results = build_cached_municipality_scenario(
         municipality_roads,
@@ -148,16 +159,43 @@ def render_municipality_pilot() -> None:
         dataset_version,
         assumptions_version,
     )
+    presentation_summary = summarize_network_for_presentation(
+        municipality_roads,
+        municipality_results,
+    )
+
+    if active_section == "Dashboard":
+        render_municipality_executive_overview(
+            DASHBOARD_MUNICIPALITY,
+            municipality_roads,
+            municipality_results,
+        )
+        if st.button("Open investment briefing", key="municipality_open_briefing"):
+            navigate_to_section("Pavement Analytics", current_section=active_section)
+        return
 
     if active_section == "Pavement Analytics":
-        st.markdown("### Pavement Analytics")
+        render_municipality_section_header(
+            DASHBOARD_MUNICIPALITY,
+            "Pavement Analytics",
+            "Move from current condition to a transparent investment strategy and program impact.",
+        )
+        render_network_snapshot(presentation_summary)
+        render_municipality_scenario_selector(scenario_catalog)
         render_municipality_recommendations(DASHBOARD_MUNICIPALITY, municipality_results)
-        render_municipality_scenario_impact(municipality_results)
+        render_municipality_scenario_impact(
+            municipality_results,
+            DASHBOARD_MUNICIPALITY.data_provenance.analysis_label,
+        )
         if st.button("Open interactive network map", key="municipality_open_map"):
             navigate_to_section("Network Map", current_section=active_section)
 
     elif active_section == "Network Map":
-        st.markdown("### Network Map")
+        render_municipality_section_header(
+            DASHBOARD_MUNICIPALITY,
+            "Network Map",
+            "Explore condition, calculated risk, and recommended priority projects by segment.",
+        )
         # Folium and GeoPandas are intentionally imported only after this action.
         from components.municipality_map import render_municipality_map
 
@@ -171,7 +209,22 @@ def render_municipality_pilot() -> None:
             navigate_to_section("Reports", current_section=active_section)
 
     elif active_section == "Reports":
-        st.markdown("### Executive Report")
+        render_municipality_section_header(
+            DASHBOARD_MUNICIPALITY,
+            "Reports",
+            "Prepare municipality-specific decision materials from the selected strategy.",
+        )
+        with st.container(border=True):
+            st.subheader("Executive PDF briefing")
+            st.caption(
+                "Includes network condition, data status, the selected investment strategy, "
+                "recommended projects, and planning assumptions."
+            )
+            st.write(f"**Selected strategy:** {municipality_results['scenario_name']}")
+            st.write(
+                f"**Planning program:** {len(municipality_results['roads'])} projects · "
+                f"${municipality_results['spent']:,.0f}"
+            )
         if not st.session_state.get("municipality_report_requested", False):
             if st.button(
                 "Generate executive briefing",
@@ -188,7 +241,7 @@ def render_municipality_pilot() -> None:
                 municipality_results,
                 dataset_version,
                 date.today().isoformat(),
-                "municipality-pilot-report-v1.4",
+                "municipality-pilot-report-v1.5",
                 DASHBOARD_RUNTIME_SLUG,
             )
             from components.municipality_report import render_municipality_report
@@ -245,27 +298,6 @@ st.markdown("""
     padding:15px;
     border-radius:12px;
     box-shadow:0px 2px 8px rgba(0,0,0,.08);
-}
-
-h1{
-    color:#0B3C5D;
-}
-
-.pilot-notice{
-    background:#EAF2F8;
-    border-left:4px solid #005EA2;
-    border-radius:6px;
-    color:#17324D;
-    font-size:.88rem;
-    line-height:1.35;
-    margin:.5rem 0 1rem 0;
-    padding:.65rem .8rem;
-}
-
-.pilot-notice-sidebar{
-    font-size:.78rem;
-    margin:.55rem 0 .85rem 0;
-    padding:.55rem .65rem;
 }
 
 </style>
