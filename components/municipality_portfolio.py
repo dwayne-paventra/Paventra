@@ -30,6 +30,7 @@ def _open_dashboard(config, *, runtime: bool) -> None:
             else "paventra_selected_municipality_slug"
         )
         st.session_state[selection_key] = config.slug
+        st.session_state["paventra_dashboard_section"] = "Dashboard"
         st.switch_page("dashboard.py")
 
 

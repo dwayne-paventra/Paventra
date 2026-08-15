@@ -373,7 +373,6 @@ class MunicipalityAdminTests(unittest.TestCase):
                 [
                     "Create Illustrative Demo",
                     "Import Municipality Data",
-                    "Municipality Portfolio",
                 ],
             )
             app.text_input(key="demo_formal_name").set_value("AppTest Runtime Demo")
@@ -421,8 +420,9 @@ class MunicipalityAdminTests(unittest.TestCase):
 
         app = AppTest.from_file(
             "pages/1_Municipality_Onboarding.py", default_timeout=30
-        ).run()
-        app.radio[0].set_value("Municipality Portfolio").run()
+        )
+        app.session_state["paventra_operator_view"] = "portfolio"
+        app.run()
         self.assertFalse(app.exception)
         self.assertTrue(any(item.value == "Municipality Portfolio" for item in app.header))
         self.assertTrue(

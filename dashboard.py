@@ -90,19 +90,28 @@ def build_cached_municipality_report(
 def render_municipality_pilot() -> None:
     """Render the active municipality without eagerly loading optional dependencies."""
 
-    from helpers.sidebar import render_sidebar
+    from helpers.sidebar import (
+        DASHBOARD_SECTIONS,
+        DEFAULT_DASHBOARD_SECTION,
+        navigate_to_section,
+        render_sidebar,
+    )
     from components.municipality_executive import render_municipality_executive_overview
+
+    active_section = st.session_state.get(
+        "paventra_dashboard_section",
+        DEFAULT_DASHBOARD_SECTION,
+    )
+    if active_section not in DASHBOARD_SECTIONS:
+        active_section = DEFAULT_DASHBOARD_SECTION
+        st.session_state["paventra_dashboard_section"] = active_section
 
     render_sidebar(
         pilot_mode=True,
         pilot_notice=DASHBOARD_MUNICIPALITY.pilot_disclaimer,
         pilot_title=DASHBOARD_MUNICIPALITY.pilot_name,
+        active_section=active_section,
     )
-    if st.sidebar.button(
-        "Return to Municipality Portfolio",
-        key="municipality_return_to_portfolio",
-    ):
-        st.switch_page("pages/1_Municipality_Onboarding.py")
 
     data_path = DASHBOARD_MUNICIPALITY.data_path
     dataset_version = data_path.stat().st_mtime_ns
@@ -115,10 +124,10 @@ def render_municipality_pilot() -> None:
         DASHBOARD_RUNTIME_SLUG,
     )
 
-    render_municipality_executive_overview(DASHBOARD_MUNICIPALITY, municipality_roads)
-    if st.button("Open investment briefing", key="municipality_open_briefing"):
-        st.session_state["municipality_briefing_open"] = True
-    if not st.session_state.get("municipality_briefing_open", False):
+    if active_section == "Dashboard":
+        render_municipality_executive_overview(DASHBOARD_MUNICIPALITY, municipality_roads)
+        if st.button("Open investment briefing", key="municipality_open_briefing"):
+            navigate_to_section("Pavement Analytics", current_section=active_section)
         return
 
     from pilot.municipality_scenarios import get_scenario_catalog
@@ -140,14 +149,15 @@ def render_municipality_pilot() -> None:
         assumptions_version,
     )
 
-    st.markdown("### Investment recommendations")
-    render_municipality_recommendations(DASHBOARD_MUNICIPALITY, municipality_results)
-    render_municipality_scenario_impact(municipality_results)
+    if active_section == "Pavement Analytics":
+        st.markdown("### Pavement Analytics")
+        render_municipality_recommendations(DASHBOARD_MUNICIPALITY, municipality_results)
+        render_municipality_scenario_impact(municipality_results)
+        if st.button("Open interactive network map", key="municipality_open_map"):
+            navigate_to_section("Network Map", current_section=active_section)
 
-    st.markdown("### Network Explorer")
-    if st.button("Open interactive network map", key="municipality_open_map"):
-        st.session_state["municipality_map_open"] = True
-    if st.session_state.get("municipality_map_open", False):
+    elif active_section == "Network Map":
+        st.markdown("### Network Map")
         # Folium and GeoPandas are intentionally imported only after this action.
         from components.municipality_map import render_municipality_map
 
@@ -156,25 +166,34 @@ def render_municipality_pilot() -> None:
             municipality_roads,
             municipality_results,
         )
+        if st.button("Generate executive briefing", key="municipality_generate_report"):
+            st.session_state["municipality_report_requested"] = True
+            navigate_to_section("Reports", current_section=active_section)
 
-    st.markdown("### Executive report")
-    if st.button("Generate executive briefing", key="municipality_generate_report"):
-        st.session_state["municipality_report_requested"] = True
-    if st.session_state.get("municipality_report_requested", False):
-        report_bytes = build_cached_municipality_report(
-            DASHBOARD_MUNICIPALITY.slug,
-            DASHBOARD_MUNICIPALITY.normalized_data_status,
-            DASHBOARD_MUNICIPALITY.source_provenance_cache_key,
-            municipality_roads,
-            municipality_results,
-            dataset_version,
-            date.today().isoformat(),
-            "municipality-pilot-report-v1.4",
-            DASHBOARD_RUNTIME_SLUG,
-        )
-        from components.municipality_report import render_municipality_report
+    elif active_section == "Reports":
+        st.markdown("### Executive Report")
+        if not st.session_state.get("municipality_report_requested", False):
+            if st.button(
+                "Generate executive briefing",
+                key="municipality_generate_report",
+            ):
+                st.session_state["municipality_report_requested"] = True
+                st.rerun()
+        else:
+            report_bytes = build_cached_municipality_report(
+                DASHBOARD_MUNICIPALITY.slug,
+                DASHBOARD_MUNICIPALITY.normalized_data_status,
+                DASHBOARD_MUNICIPALITY.source_provenance_cache_key,
+                municipality_roads,
+                municipality_results,
+                dataset_version,
+                date.today().isoformat(),
+                "municipality-pilot-report-v1.4",
+                DASHBOARD_RUNTIME_SLUG,
+            )
+            from components.municipality_report import render_municipality_report
 
-        render_municipality_report(DASHBOARD_MUNICIPALITY, report_bytes)
+            render_municipality_report(DASHBOARD_MUNICIPALITY, report_bytes)
 
     render_municipality_assumptions(DASHBOARD_MUNICIPALITY)
 

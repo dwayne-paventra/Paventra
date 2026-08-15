@@ -416,8 +416,14 @@ def _render_existing_municipalities() -> None:
     st.caption(f"Generated packages are isolated under {GENERATED_MUNICIPALITIES_ROOT}.")
 
 
-def render_municipality_admin() -> None:
+def render_municipality_admin(*, operator_view: str = "onboarding") -> None:
     """Render the operator-facing municipality workflow."""
+
+    if operator_view == "portfolio":
+        render_municipality_portfolio()
+        return
+    if operator_view != "onboarding":
+        raise ValueError(f"Unknown municipality operator view: {operator_view!r}")
 
     st.title("Municipality Onboarding & Demo Builder")
     st.caption(
@@ -429,13 +435,11 @@ def render_municipality_admin() -> None:
         [
             "Create Illustrative Demo",
             "Import Municipality Data",
-            "Municipality Portfolio",
         ],
         horizontal=True,
+        key="municipality_admin_workflow",
     )
     if mode == "Create Illustrative Demo":
         _render_demo_builder()
     elif mode == "Import Municipality Data":
         _render_real_import()
-    else:
-        render_municipality_portfolio()

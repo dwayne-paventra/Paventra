@@ -209,7 +209,7 @@ class GeneratedDemoPresentationTests(unittest.TestCase):
             self.assertEqual([item.value for item in app.title], [f"{formal_name} Demonstration"])
             self.assertTrue(
                 any(
-                    button.label == "Return to Municipality Portfolio"
+                    button.label == "Municipality Portfolio"
                     for button in app.button
                 )
             )
@@ -257,8 +257,9 @@ class GeneratedDemoPresentationTests(unittest.TestCase):
 
             portfolio = AppTest.from_file(
                 "pages/1_Municipality_Onboarding.py", default_timeout=30
-            ).run()
-            portfolio.radio[0].set_value("Municipality Portfolio").run()
+            )
+            portfolio.session_state["paventra_operator_view"] = "portfolio"
+            portfolio.run()
             portfolio.text_input(key="portfolio_search").set_value(slug).run()
             selector = portfolio.selectbox(key="portfolio_selected")
             self.assertEqual(len(selector.options), 2)
@@ -277,11 +278,11 @@ class GeneratedDemoPresentationTests(unittest.TestCase):
                 [item.value for item in restarted.title],
                 [f"{formal_name} Demonstration"],
             )
-            restarted.button(key="municipality_return_to_portfolio").click().run()
+            restarted.button(key="paventra_nav_municipality_portfolio").click().run()
             self.assertFalse(restarted.exception)
             self.assertIn(
-                "Municipality Onboarding & Demo Builder",
-                [item.value for item in restarted.title],
+                "Municipality Portfolio",
+                [item.value for item in restarted.header],
             )
         finally:
             if target.exists():
