@@ -23,6 +23,7 @@ from pilot.canonical_inventory import (
     validate_canonical_schema,
 )
 from pilot.municipality_config import MunicipalityConfig
+from pilot.municipality_config import validate_municipality_config
 from pilot.municipality_onboarding import (
     export_canonical_inventory,
     load_onboarding_manifest,
@@ -33,6 +34,19 @@ from pilot.source_provenance import (
     compute_content_checksum,
     compute_source_checksum,
 )
+from pilot.municipality_package_lifecycle import (
+    CANONICAL_REVIEW_NAME,
+    HISTORY_NAME,
+    MAPPING_REVIEW_NAME,
+    PackageLifecycleState,
+    REGISTRATION_PACKET_NAME,
+    REVIEW_SUMMARY_NAME,
+    VALIDATION_SUMMARY_NAME,
+    append_package_event,
+    initialize_real_import_workspace_artifacts,
+    validate_real_import_package,
+)
+from pilot.onboarding_manifest_contract import REAL_IMPORT_WORKSPACE_MANIFEST_VERSION
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -327,6 +341,7 @@ def _build_config(
     mapping: Mapping[str, str],
     defaults: Mapping[str, Any],
     provenance: SourceProvenance,
+    manifest_version: int = 3,
 ) -> MunicipalityConfig:
     return MunicipalityConfig(
         municipality_id=f"{identity.slug}-{suggest_municipality_slug(identity.state)}",
@@ -349,7 +364,7 @@ def _build_config(
         source_column_mapping=dict(mapping),
         canonical_defaults=dict(defaults),
         source_provenance=provenance,
-        onboarding_manifest_version=3,
+        onboarding_manifest_version=manifest_version,
     )
 
 
@@ -474,11 +489,16 @@ def review_illustrative_demo(
     )
 
 
-def _manifest_document(review: OnboardingReview, source_filename: str) -> dict[str, Any]:
+def _manifest_document(
+    review: OnboardingReview,
+    source_filename: str,
+    *,
+    real_import: bool = False,
+) -> dict[str, Any]:
     config = review.config
     provenance = config.source_provenance
-    return {
-        "manifest_version": 3,
+    document = {
+        "manifest_version": REAL_IMPORT_WORKSPACE_MANIFEST_VERSION if real_import else 3,
         "municipality_id": config.municipality_id,
         "slug": config.slug,
         "state": config.state,
@@ -502,6 +522,19 @@ def _manifest_document(review: OnboardingReview, source_filename: str) -> dict[s
         "leadership_label": config.leadership_label,
         "official_action_label": config.official_action_label,
     }
+    if real_import:
+        document.update({
+            "package_type": "real_import",
+            "lifecycle_state": PackageLifecycleState.DRAFT.value,
+            "source_field_meanings": {},
+            "canonical_review_path": CANONICAL_REVIEW_NAME,
+            "mapping_review_path": MAPPING_REVIEW_NAME,
+            "validation_summary_path": VALIDATION_SUMMARY_NAME,
+            "review_summary_path": REVIEW_SUMMARY_NAME,
+            "registration_packet_path": REGISTRATION_PACKET_NAME,
+            "history_path": HISTORY_NAME,
+        })
+    return document
 
 
 def _write_package(
@@ -522,8 +555,12 @@ def _write_package(
         if compute_source_checksum(raw_path) != review.checksum:
             raise ValueError("Preserved raw source checksum changed during package creation.")
         manifest_path = destination / GENERATED_MANIFEST_NAME
+        real_import = review.config.inventory_adapter != "canonical_demo"
         manifest_path.write_text(
-            json.dumps(_manifest_document(review, source_filename), indent=2) + "\n",
+            json.dumps(
+                _manifest_document(review, source_filename, real_import=real_import),
+                indent=2,
+            ) + "\n",
             encoding="utf-8",
         )
         config = load_onboarding_manifest(manifest_path)
@@ -554,6 +591,20 @@ def _write_package(
             + "\n",
             encoding="utf-8",
         )
+        if real_import:
+            append_package_event(
+                destination,
+                "created",
+                PackageLifecycleState.DRAFT,
+                "Real-import workspace created from operator-reviewed source inputs.",
+            )
+            inspection = validate_real_import_package(destination)
+            if inspection.blocking_issues:
+                raise ValueError(
+                    "Created real-import workspace did not pass validation: "
+                    + "; ".join(issue.message for issue in inspection.blocking_issues)
+                )
+            config = load_onboarding_manifest(manifest_path)
         return GeneratedMunicipalityPackage(
             config=config,
             manifest_path=manifest_path,
@@ -609,6 +660,137 @@ def create_real_import_package(
     )
 
 
+def save_real_import_draft(
+    identity: MunicipalityIdentity,
+    source_content: bytes,
+    *,
+    mapping: Mapping[str, str],
+    defaults: Mapping[str, Any],
+    data_status: str,
+    source_owner: str,
+    acquired_date: str,
+    source_reference: str,
+    declared_checksum: str | None = None,
+    source_field_meanings: Mapping[str, str] | None = None,
+    generated_root: Path = GENERATED_MUNICIPALITIES_ROOT,
+) -> Path:
+    """Create or update a resumable real-import workspace without claiming validation."""
+
+    if not source_content:
+        raise ValueError("Uploaded source CSV must not be empty before saving a draft.")
+    checksum = compute_content_checksum(source_content)
+    declared = (declared_checksum or "").strip().lower()
+    if declared and declared != checksum:
+        raise ValueError(
+            f"Declared source checksum does not match upload: declared {declared}, actual {checksum}."
+        )
+    destination = _package_directory(identity.slug, generated_root)
+    exists = destination.exists()
+    previous_state = PackageLifecycleState.DRAFT
+    if exists:
+        manifest_path = destination / GENERATED_MANIFEST_NAME
+        try:
+            existing = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Existing real-import workspace could not be reopened: {exc}") from exc
+        if existing.get("package_type") != "real_import":
+            raise ValueError(
+                f"Generated municipality slug '{identity.slug}' is not a real-import workspace."
+            )
+        try:
+            previous_state = PackageLifecycleState(existing.get("lifecycle_state"))
+        except ValueError:
+            previous_state = PackageLifecycleState.VALIDATION_REQUIRED
+    else:
+        destination = assert_slug_available(identity.slug, generated_root=generated_root)
+        destination.mkdir(parents=True, exist_ok=False)
+
+    filtered_mapping = {
+        str(source): str(target)
+        for source, target in mapping.items()
+        if str(target).strip()
+    }
+    provenance = SourceProvenance(
+        owner=source_owner,
+        acquired_date=acquired_date,
+        reference=source_reference,
+        checksum=checksum,
+    )
+    config = _build_config(
+        identity,
+        data_path=destination / "source_roads.csv",
+        inventory_adapter="mapped_csv",
+        data_status=data_status,
+        mapping=filtered_mapping,
+        defaults=defaults,
+        provenance=provenance,
+        manifest_version=REAL_IMPORT_WORKSPACE_MANIFEST_VERSION,
+    )
+    validate_municipality_config(config)
+    from pilot.municipality_data import INVENTORY_ADAPTERS
+    from pilot.municipality_scenarios import SCENARIO_CATALOGS
+    if config.inventory_adapter not in INVENTORY_ADAPTERS:
+        raise ValueError(
+            f"Municipality '{config.slug}' field 'inventory_adapter' references unknown "
+            f"adapter '{config.inventory_adapter}'."
+        )
+    if config.scenario_catalog_id not in SCENARIO_CATALOGS:
+        raise ValueError(
+            f"Municipality '{config.slug}' field 'scenario_catalog_id' references unknown "
+            f"catalog '{config.scenario_catalog_id}'."
+        )
+
+    review = OnboardingReview(
+        config=config,
+        source_rows=0,
+        canonical=pd.DataFrame(),
+        mapping=filtered_mapping,
+        defaults=dict(defaults),
+        checksum=checksum,
+        treatment_normalizations={},
+        unknown_treatments=(),
+    )
+    document = _manifest_document(review, "source_roads.csv", real_import=True)
+    document["source_field_meanings"] = {
+        str(field): str(meaning).strip()
+        for field, meaning in (source_field_meanings or {}).items()
+        if str(meaning).strip()
+    }
+    if exists and previous_state != PackageLifecycleState.DRAFT:
+        document["lifecycle_state"] = PackageLifecycleState.VALIDATION_REQUIRED.value
+    manifest_path = destination / GENERATED_MANIFEST_NAME
+    temporary = manifest_path.with_suffix(".json.tmp")
+    try:
+        (destination / "source_roads.raw.csv").write_bytes(source_content)
+        (destination / "source_roads.csv").write_bytes(source_content)
+        temporary.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(manifest_path)
+        (destination / GENERATED_METADATA_NAME).write_text(
+            json.dumps({
+                "metadata_version": 2,
+                "slug": config.slug,
+                "package_type": "real_import",
+                "road_count": _csv_record_count(destination / "source_roads.csv"),
+                "validation_result": "NOT RUN",
+                "created_at": _read_package_metadata(destination).get("created_at")
+                or date.today().isoformat(),
+            }, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        inspection = initialize_real_import_workspace_artifacts(destination)
+        append_package_event(
+            destination,
+            "review updated" if exists else "created",
+            inspection.lifecycle_state,
+            "Operator saved real-import identity, provenance, mappings, defaults, and source reference.",
+        )
+        return destination
+    except Exception:
+        if not exists and destination.exists():
+            shutil.rmtree(destination)
+        raise
+
+
 def load_generated_municipality(
     slug: str,
     *,
@@ -634,7 +816,12 @@ def list_generated_municipalities(
     for directory in sorted(generated_root.iterdir()):
         manifest = directory / GENERATED_MANIFEST_NAME
         if directory.is_dir() and manifest.is_file():
-            configs.append(load_onboarding_manifest(manifest))
+            try:
+                configs.append(load_onboarding_manifest(manifest))
+            except ValueError:
+                # Draft real imports are discoverable through the Portfolio but
+                # are intentionally not runtime-loadable configurations.
+                continue
     return tuple(configs)
 
 
@@ -678,6 +865,45 @@ def _generated_portfolio_entry(
     manifest = directory / GENERATED_MANIFEST_NAME
     metadata = _read_package_metadata(directory)
     try:
+        raw_document = json.loads(manifest.read_text(encoding="utf-8"))
+        if not isinstance(raw_document, dict):
+            raise ValueError("Generated manifest must contain a JSON object.")
+        if raw_document.get("package_type") == "real_import":
+            from pilot.municipality_package_lifecycle import refresh_real_import_readiness
+
+            inspection = refresh_real_import_readiness(directory)
+            config = inspection.config
+            validation = (
+                "; ".join(issue.message for issue in inspection.issues)
+                if inspection.issues
+                else "All current package gates pass"
+            )
+            return MunicipalityPortfolioEntry(
+                slug=str(raw_document.get("slug") or directory.name),
+                formal_name=str(raw_document.get("formal_name") or directory.name),
+                short_name=str(
+                    raw_document.get("short_name")
+                    or raw_document.get("formal_name")
+                    or directory.name
+                ),
+                entity_type=str(raw_document.get("entity_type") or "unknown"),
+                data_status=str(raw_document.get("data_status") or "unknown"),
+                source_type="Municipality import",
+                package_type="real_import",
+                scenario_catalog_id=str(
+                    raw_document.get("scenario_catalog_id") or "unknown"
+                ),
+                road_count=inspection.source_rows,
+                generated_date=_generated_date(manifest, metadata),
+                permanent=False,
+                archived=False,
+                readiness_state=f"Real Import — {inspection.lifecycle_state.value}",
+                validation_summary=validation,
+                package_path=directory,
+                manifest_path=manifest,
+                manifest_version=raw_document.get("manifest_version"),
+                config=config,
+            )
         config = load_onboarding_manifest(manifest)
         if config.slug != directory.name:
             raise ValueError(
@@ -694,7 +920,7 @@ def _generated_portfolio_entry(
         elif illustrative_demo and config.normalized_data_status == "illustrative":
             readiness = "Generated Illustrative Demo"
         else:
-            readiness = "Real Import — Ready for Registration"
+            readiness = "Real Import — Validation Required"
         cached_count = metadata.get("road_count")
         road_count = (
             cached_count

@@ -188,7 +188,7 @@ def validate_municipality_config(config: MunicipalityConfig) -> None:
 
     if (
         config.onboarding_manifest_version is not None
-        and config.onboarding_manifest_version not in (1, 2, 3)
+        and config.onboarding_manifest_version not in (1, 2, 3, 4)
     ):
         raise ValueError(
             f"Municipality '{identity}' field 'onboarding_manifest_version' has "

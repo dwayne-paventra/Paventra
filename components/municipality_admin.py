@@ -5,6 +5,8 @@ from __future__ import annotations
 import csv
 from datetime import date
 import io
+import json
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
@@ -15,16 +17,27 @@ from pilot.municipality_admin import (
     MunicipalityIdentity,
     assert_slug_available,
     create_illustrative_demo_package,
-    create_real_import_package,
     list_generated_municipalities,
     review_illustrative_demo,
-    review_real_import,
+    save_real_import_draft,
     suggest_column_mappings,
     suggest_municipality_slug,
 )
 from pilot.municipality_config import SUPPORTED_ENTITY_TYPES
 from pilot.municipality_registry import MUNICIPALITIES
 from pilot.municipality_scenarios import SCENARIO_CATALOGS
+from pilot.municipality_package_lifecycle import (
+    PackageLifecycleState,
+    begin_real_import_review,
+    build_mapping_review,
+    inspect_real_import_package,
+    mark_real_import_ready,
+    read_package_history,
+    record_package_reopened,
+    registration_packet_path,
+    suggested_registry_snippet,
+    validate_real_import_package,
+)
 from components.municipality_portfolio import render_municipality_portfolio
 
 
@@ -254,12 +267,199 @@ def _read_uploaded_headers(uploaded) -> tuple[bytes, list[str]]:
     return content, [str(column) for column in frame.columns]
 
 
+def _hydrate_real_import_workspace(slug: str) -> tuple[Path, bytes, list[str]]:
+    """Restore persisted operator inputs without requiring JSON or folder access."""
+
+    package_path = GENERATED_MUNICIPALITIES_ROOT / slug
+    manifest_path = package_path / "manifest.json"
+    document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if document.get("package_type") != "real_import":
+        raise ValueError(f"Generated package '{slug}' is not a real municipality import.")
+    source_path = package_path / str(document["source_csv_path"])
+    content = source_path.read_bytes()
+    _, headers = _read_uploaded_headers(type("Upload", (), {"getvalue": lambda self: content})())
+
+    values = {
+        "import_formal_name": document.get("formal_name", ""),
+        "import_short_name": document.get("short_name", ""),
+        "import_entity_type": document.get("entity_type", "municipality"),
+        "import_state": document.get("state", "Michigan"),
+        "import_slug": document.get("slug", slug),
+        "import_leadership": document.get("leadership_label", "municipal leadership"),
+        "import_official_action": document.get(
+            "official_action_label", "official agency determination"
+        ),
+        "import_pilot_label": document.get("pilot_label", "Municipal Pilot"),
+        "import_latitude": float(document.get("map_center", [42.25, -84.4])[0]),
+        "import_longitude": float(document.get("map_center", [42.25, -84.4])[1]),
+        "import_zoom": int(document.get("map_zoom", 12)),
+        "import_scenario_catalog": document.get("scenario_catalog_id", "standard"),
+        "import_status": document.get("data_status", "provisional"),
+        "import_owner": document.get("source_owner", ""),
+        "import_acquired": date.fromisoformat(document.get("source_acquired_date")),
+        "import_reference": document.get("source_reference", ""),
+        "import_declared_checksum": document.get("source_checksum", ""),
+    }
+    for key, value in values.items():
+        st.session_state[key] = value
+    mapping = document.get("column_mapping", {})
+    meanings = document.get("source_field_meanings", {})
+    defaults = document.get("canonical_defaults", {})
+    for index, header in enumerate(headers):
+        st.session_state[f"mapping_{index}_{header}"] = mapping.get(header, _UNMAPPED)
+        st.session_state[f"meaning_{index}_{header}"] = meanings.get(header, "")
+    for canonical, value in defaults.items():
+        st.session_state[f"default_{canonical}"] = str(value)
+    st.session_state["import_previous_slug_suggestion"] = document.get("slug", slug)
+    st.session_state["paventra_real_import_hydrated"] = slug
+    record_package_reopened(package_path)
+    return package_path, content, headers
+
+
+def _render_operational_review(package_path: Path) -> None:
+    """Render concise validation, mapping, lifecycle, and handoff surfaces."""
+
+    inspection = inspect_real_import_package(package_path)
+    document = inspection.manifest
+    st.subheader("Real municipality package workspace")
+    st.dataframe(
+        pd.DataFrame([{
+            "Municipality": document.get("formal_name", ""),
+            "Entity": document.get("entity_type", ""),
+            "Data status": document.get("data_status", ""),
+            "Source owner": document.get("source_owner", ""),
+            "Acquired": document.get("source_acquired_date", ""),
+            "Source rows": inspection.source_rows,
+            "Canonical rows": inspection.canonical_rows,
+            "Mappings": len(document.get("column_mapping", {})),
+            "Defaults": len(document.get("canonical_defaults", {})),
+            "Scenario": document.get("scenario_catalog_id", ""),
+            "Map": f"{document.get('map_center')} / zoom {document.get('map_zoom')}",
+            "Readiness": inspection.lifecycle_state.value,
+        }]),
+        hide_index=True,
+        width="stretch",
+    )
+    st.caption(f"Source reference: {document.get('source_reference', '')}")
+    st.code(f"SHA-256: {document.get('source_checksum', '')}")
+
+    blocking = inspection.blocking_issues
+    warnings = inspection.warnings
+    if blocking:
+        st.error(f"{len(blocking)} blocking issue(s) prevent registration readiness.")
+        for issue in blocking:
+            st.write(f"**BLOCKING — {issue.field}:** {issue.message}")
+    else:
+        st.success("No blocking package issues are currently detected.")
+    if warnings:
+        st.warning(f"{len(warnings)} non-blocking warning(s) require review.")
+        for issue in warnings:
+            st.write(f"**WARNING — {issue.field}:** {issue.message}")
+
+    with st.expander("Mapping and default review", expanded=True):
+        st.dataframe(build_mapping_review(document), hide_index=True, width="stretch")
+
+    state = inspection.lifecycle_state
+    if st.button("Validate saved package", key="validate_saved_import"):
+        result = validate_real_import_package(package_path)
+        if result.blocking_issues:
+            st.error("Validation failed. Correct the blocking issues and save the draft again.")
+        else:
+            st.success("Validation passed. The package is Validated and ready for operator review.")
+        st.rerun()
+    if state == PackageLifecycleState.VALIDATED:
+        if st.button("Begin operator review", key="begin_import_review"):
+            begin_real_import_review(package_path)
+            st.rerun()
+    elif state == PackageLifecycleState.REVIEW_REQUIRED:
+        st.info(
+            "Review identity, provenance, mapping/default origins, validation warnings, map, "
+            "scenario catalog, and canonical review artifact before confirming readiness."
+        )
+        if st.button(
+            "Confirm review complete — Ready for Registration",
+            key="mark_import_ready",
+            type="primary",
+        ):
+            mark_real_import_ready(package_path)
+            st.rerun()
+    elif state == PackageLifecycleState.READY_FOR_REGISTRATION:
+        st.success("Ready for Registration — final registration remains developer-controlled.")
+        packet = registration_packet_path(package_path)
+        st.subheader("Developer Registration Handoff")
+        st.write("Package path:", str(package_path))
+        st.write("Manifest path:", str(inspection.manifest_path))
+        st.write("Slug:", document.get("slug", ""))
+        st.write("Readiness:", state.value)
+        st.code(suggested_registry_snippet(str(document.get("slug", "")), inspection.manifest_path))
+        st.download_button(
+            "Download registration packet",
+            data=packet.read_bytes(),
+            file_name=f"{document.get('slug', 'municipality')}_registration_packet.md",
+            mime="text/markdown",
+            key="download_registration_packet",
+        )
+        with st.expander("Developer verification checklist", expanded=True):
+            st.markdown(
+                "- [ ] Inspect manifest\n"
+                "- [ ] Inspect mappings/defaults\n"
+                "- [ ] Confirm checksum\n"
+                "- [ ] Add registry entry\n"
+                "- [ ] Run registry/startup validation\n"
+                "- [ ] Run full tests and AppTest\n"
+                "- [ ] Generate and inspect report\n"
+                "- [ ] Run health check\n"
+                "- [ ] Inspect Git diff\n"
+                "- [ ] Commit only after review"
+            )
+
+    history = read_package_history(package_path)
+    with st.expander("Package history (operational log, not a security audit)"):
+        st.dataframe(pd.DataFrame(history), hide_index=True, width="stretch")
+
+
 def _render_real_import() -> None:
     st.header("Import Municipality Data")
     st.info(
         "Real uploads default to provisional. Official is never inferred and remains only an "
         "explicit software designation—not municipal certification or approval."
     )
+    st.markdown(
+        "**Workflow:** Import Municipality Data → Configure Identity/Provenance → "
+        "Map Columns → Apply Defaults → Validate → Review → Ready for Registration"
+    )
+    resumed_slug = st.session_state.get("paventra_real_import_slug")
+    resumed_package: Path | None = None
+    persisted_content: bytes | None = None
+    persisted_headers: list[str] = []
+    if resumed_slug and st.session_state.get("paventra_real_import_hydrated") != resumed_slug:
+        try:
+            resumed_package, persisted_content, persisted_headers = _hydrate_real_import_workspace(
+                resumed_slug
+            )
+        except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            st.error(f"Real-import workspace could not be reopened: {exc}")
+            st.session_state.pop("paventra_real_import_slug", None)
+    elif resumed_slug:
+        resumed_package = GENERATED_MUNICIPALITIES_ROOT / resumed_slug
+        try:
+            document = json.loads((resumed_package / "manifest.json").read_text(encoding="utf-8"))
+            persisted_content = (resumed_package / document["source_csv_path"]).read_bytes()
+            frame = pd.read_csv(io.BytesIO(persisted_content), nrows=5)
+            persisted_headers = [str(column) for column in frame.columns]
+        except (OSError, KeyError, json.JSONDecodeError, pd.errors.ParserError) as exc:
+            st.error(f"Persisted source could not be reopened: {exc}")
+
+    if resumed_package is not None:
+        st.success(f"Reopened persisted workspace: {resumed_slug}")
+        if st.button("Start a new real import", key="start_new_real_import"):
+            for key in list(st.session_state):
+                if key.startswith(("import_", "mapping_", "meaning_", "default_")):
+                    del st.session_state[key]
+            st.session_state.pop("paventra_real_import_slug", None)
+            st.session_state.pop("paventra_real_import_hydrated", None)
+            st.rerun()
+
     identity = _identity_fields("import")
     uploaded = st.file_uploader("Upload municipality road inventory CSV", type=["csv"])
     status = st.selectbox(
@@ -274,8 +474,8 @@ def _render_real_import() -> None:
         "Declared SHA-256 (optional)", key="import_declared_checksum"
     )
 
-    content = None
-    headers: list[str] = []
+    content = persisted_content
+    headers: list[str] = persisted_headers
     if uploaded is not None:
         try:
             content, headers = _read_uploaded_headers(uploaded)
@@ -284,6 +484,7 @@ def _render_real_import() -> None:
 
     mapping: dict[str, str] = {}
     defaults: dict[str, str] = {}
+    meanings: dict[str, str] = {}
     if headers:
         suggestions = suggest_column_mappings(headers)
         st.subheader("Map source columns")
@@ -300,6 +501,12 @@ def _render_real_import() -> None:
             )
             if selected != _UNMAPPED:
                 mapping[header] = selected
+            meaning = st.text_input(
+                f"Source meaning (optional): {header}",
+                key=f"meaning_{index}_{header}",
+            )
+            if meaning.strip():
+                meanings[header] = meaning.strip()
 
         mapped_targets = set(mapping.values())
         default_candidates = [
@@ -318,10 +525,13 @@ def _render_real_import() -> None:
                 if value != "":
                     defaults[column] = value
 
-    if st.button("Validate Import", key="validate_import", disabled=content is None):
+    if st.button("Save or update draft", key="save_import_draft", disabled=content is None):
         try:
-            assert_slug_available(identity.slug)
-            review = review_real_import(
+            if resumed_slug and identity.slug != resumed_slug:
+                raise ValueError(
+                    "A reopened package slug cannot be changed in place. Start a new import for a new slug."
+                )
+            package_path = save_real_import_draft(
                 identity,
                 content,
                 mapping=mapping,
@@ -331,49 +541,16 @@ def _render_real_import() -> None:
                 acquired_date=acquired.isoformat(),
                 source_reference=reference,
                 declared_checksum=declared_checksum or None,
+                source_field_meanings=meanings,
             )
-            st.session_state["import_review"] = review
-            st.session_state["import_source_content"] = content
-            st.session_state.pop("import_package", None)
-        except (TypeError, ValueError) as exc:
+            st.session_state["paventra_real_import_slug"] = identity.slug
+            st.session_state["paventra_real_import_hydrated"] = identity.slug
+            st.success(f"Draft workspace saved at {package_path}.")
+            st.rerun()
+        except (OSError, TypeError, ValueError) as exc:
             st.error(str(exc))
-
-    review = st.session_state.get("import_review")
-    if review is not None:
-        _review_summary(review)
-        current_checksum = None if content is None else review.checksum
-        changed = (
-            not _identity_matches_config(identity, review.config)
-            or review.config.normalized_data_status != status
-            or dict(review.mapping) != mapping
-            or dict(review.defaults) != defaults
-            or review.config.source_provenance.owner != owner
-            or review.config.source_provenance.acquired_date != acquired.isoformat()
-            or review.config.source_provenance.reference != reference
-            or st.session_state.get("import_source_content") != content
-            or current_checksum is None
-        )
-        if changed:
-            st.warning("Import inputs changed after validation. Validate again before creation.")
-        elif st.button("Create Municipality", key="create_import"):
-            try:
-                package = create_real_import_package(review, content)
-                st.session_state["import_package"] = package
-                st.success(f"Validated import package created at {package.manifest_path.parent}.")
-            except (OSError, TypeError, ValueError) as exc:
-                st.error(str(exc))
-
-    package = st.session_state.get("import_package")
-    if package is not None:
-        st.success("Ready for registration")
-        st.code(
-            "Load the reviewed manifest with load_onboarding_manifest, then add its "
-            f"configuration to MUNICIPALITIES under slug '{package.config.slug}'."
-        )
-        st.caption(
-            "Permanent registration remains a developer-reviewed source change. The UI does not "
-            "rewrite Python, Git, or accepted municipality configuration."
-        )
+    if resumed_package is not None and resumed_package.is_dir():
+        _render_operational_review(resumed_package)
 
 
 def _safe_inventory_count(config) -> str:

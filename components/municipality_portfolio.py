@@ -18,6 +18,13 @@ from pilot.municipality_admin import (
     restore_archived_demo,
     suggest_municipality_slug,
 )
+from pilot.municipality_package_lifecycle import (
+    build_mapping_review,
+    inspect_real_import_package,
+    read_package_history,
+    registration_packet_path,
+    suggested_registry_snippet,
+)
 
 
 def _open_dashboard(config, *, runtime: bool) -> None:
@@ -75,6 +82,13 @@ def _clone_form(entry) -> None:
 def _details(entry) -> None:
     st.subheader(f"Municipality details: {entry.formal_name}")
     config = entry.config
+    raw_manifest = None
+    if entry.manifest_path is not None and entry.manifest_path.is_file():
+        try:
+            candidate = json.loads(entry.manifest_path.read_text(encoding="utf-8"))
+            raw_manifest = candidate if isinstance(candidate, dict) else None
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            pass
     overview, provenance, validation, manifest = st.tabs(
         ["Overview", "Provenance", "Validation Summary", "Manifest"]
     )
@@ -104,12 +118,18 @@ def _details(entry) -> None:
             st.write("Terminology:", config.leadership_label, "·", config.official_action_label)
         if entry.dashboard_launchable and config is not None:
             _open_dashboard(config, runtime=not entry.permanent)
-        elif entry.readiness_state == "Real Import — Ready for Registration":
+        elif entry.package_type == "real_import":
             st.info("Developer review and permanent registry registration are required before launch.")
+            if st.button("Continue real-import review", key=f"resume_real_import_{entry.slug}"):
+                st.session_state["paventra_real_import_slug"] = entry.slug
+                st.session_state.pop("paventra_real_import_hydrated", None)
+                st.session_state["paventra_operator_view"] = "onboarding"
+                st.session_state["municipality_admin_workflow"] = "Import Municipality Data"
+                st.rerun()
     with provenance:
-        if config is None:
+        if config is None and raw_manifest is None:
             st.warning("Provenance is unavailable until this package passes manifest validation.")
-        else:
+        elif config is not None:
             st.write(config.source_provenance_label)
             source = config.source_provenance
             if source is not None:
@@ -117,6 +137,11 @@ def _details(entry) -> None:
                 st.write("Acquired date:", source.acquired_date)
                 st.write("Source reference:", source.reference)
                 st.code(f"SHA-256: {source.checksum}")
+        else:
+            st.write("Source owner:", raw_manifest.get("source_owner", "Unavailable"))
+            st.write("Acquired date:", raw_manifest.get("source_acquired_date", "Unavailable"))
+            st.write("Source reference:", raw_manifest.get("source_reference", "Unavailable"))
+            st.code(f"SHA-256: {raw_manifest.get('source_checksum', 'Unavailable')}")
     with validation:
         if entry.readiness_state == "Validation Required":
             st.error(entry.validation_summary)
@@ -125,6 +150,19 @@ def _details(entry) -> None:
         st.write("Inventory adapter:", config.inventory_adapter if config else "Unavailable")
         st.write("Scenario catalog:", entry.scenario_catalog_id)
         st.write("Manifest version:", entry.manifest_version or "Not manifest-backed")
+        if entry.package_type == "real_import" and raw_manifest is not None:
+            inspection = inspect_real_import_package(entry.package_path)
+            st.write(
+                f"Blocking issues: {len(inspection.blocking_issues)} · "
+                f"Warnings: {len(inspection.warnings)}"
+            )
+            st.dataframe(
+                build_mapping_review(raw_manifest), hide_index=True, width="stretch"
+            )
+            history = read_package_history(entry.package_path)
+            if history:
+                st.caption("Persisted package history — operational log, not a security audit")
+                st.dataframe(pd.DataFrame(history), hide_index=True, width="stretch")
     with manifest:
         if entry.manifest_path is None or not entry.manifest_path.is_file():
             st.caption("This permanent registry entry is configured in application source.")
@@ -133,6 +171,25 @@ def _details(entry) -> None:
                 st.json(json.loads(entry.manifest_path.read_text(encoding="utf-8")))
             except (OSError, UnicodeError, json.JSONDecodeError) as exc:
                 st.error(f"Manifest could not be displayed: {exc}")
+        if entry.package_type == "real_import" and raw_manifest is not None:
+            st.subheader("Developer Registration Handoff")
+            st.write("Package path:", str(entry.package_path))
+            st.write("Manifest path:", str(entry.manifest_path))
+            st.write("Slug:", entry.slug)
+            st.write("Readiness:", entry.readiness_state)
+            st.code(suggested_registry_snippet(entry.slug, entry.manifest_path))
+            if entry.readiness_state == "Real Import — Ready for Registration":
+                try:
+                    packet = registration_packet_path(entry.package_path)
+                    st.download_button(
+                        "Download registration packet",
+                        data=packet.read_bytes(),
+                        file_name=f"{entry.slug}_registration_packet.md",
+                        mime="text/markdown",
+                        key=f"portfolio_packet_{entry.slug}",
+                    )
+                except (OSError, ValueError) as exc:
+                    st.error(str(exc))
 
     if entry.package_type == "illustrative_demo":
         with st.expander("Pre-meeting demo readiness checklist"):

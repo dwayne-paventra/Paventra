@@ -10,6 +10,7 @@ from typing import Any
 
 
 CURRENT_MANIFEST_VERSION = 3
+REAL_IMPORT_WORKSPACE_MANIFEST_VERSION = 4
 MANIFEST_VERSION_FIELD = "manifest_version"
 
 
@@ -90,10 +91,46 @@ MANIFEST_V3_FIELDS = MappingProxyType(
     }
 )
 
+MANIFEST_V4_FIELDS = MappingProxyType(
+    {
+        **MANIFEST_V3_FIELDS,
+        MANIFEST_VERSION_FIELD: ManifestFieldDefinition((int,), "integer 4"),
+        # A real-import workspace may be saved before mappings are complete.
+        # Runtime loading still requires the mapping to pass the existing
+        # onboarding pipeline.
+        "column_mapping": ManifestFieldDefinition((Mapping,), "a JSON object"),
+        "source_owner": _text_field(),
+        "source_acquired_date": _text_field(),
+        "source_reference": _text_field(),
+        "source_checksum": _text_field(),
+        "package_type": _text_field(),
+        "lifecycle_state": _text_field(),
+        "source_field_meanings": ManifestFieldDefinition(
+            (Mapping,), "a JSON object", required=False
+        ),
+        "validated_fingerprint": ManifestFieldDefinition(
+            (str,), "a non-empty string", required=False, non_empty=True
+        ),
+        "readiness_fingerprint": ManifestFieldDefinition(
+            (str,), "a non-empty string", required=False, non_empty=True
+        ),
+        "canonical_checksum": ManifestFieldDefinition(
+            (str,), "a non-empty string", required=False, non_empty=True
+        ),
+        "canonical_review_path": _text_field(),
+        "mapping_review_path": _text_field(),
+        "validation_summary_path": _text_field(),
+        "review_summary_path": _text_field(),
+        "registration_packet_path": _text_field(),
+        "history_path": _text_field(),
+    }
+)
+
 MANIFEST_CONTRACTS = MappingProxyType({
     1: MANIFEST_V1_FIELDS,
     2: MANIFEST_V2_FIELDS,
     3: MANIFEST_V3_FIELDS,
+    4: MANIFEST_V4_FIELDS,
 })
 
 
