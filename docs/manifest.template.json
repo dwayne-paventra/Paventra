@@ -1,5 +1,5 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "municipality_id": "example-agency-state",
   "slug": "example_agency",
   "state": "Example State",
@@ -7,6 +7,9 @@
   "formal_name": "Example Public Works Agency",
   "short_name": "Example Agency",
   "data_status": "provisional",
+  "source_owner": "Example Public Works Agency",
+  "source_acquired_date": "2026-08-15",
+  "source_reference": "source_roads.csv delivery",
   "source_csv_path": "source_roads.csv",
   "column_mapping": {
     "Asset_ID": "road_id",

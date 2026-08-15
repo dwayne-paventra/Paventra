@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import Any
 
 
-CURRENT_MANIFEST_VERSION = 2
+CURRENT_MANIFEST_VERSION = 3
 MANIFEST_VERSION_FIELD = "manifest_version"
 
 
@@ -68,9 +68,32 @@ MANIFEST_V2_FIELDS = MappingProxyType(
     }
 )
 
+MANIFEST_V3_FIELDS = MappingProxyType(
+    {
+        **MANIFEST_V2_FIELDS,
+        MANIFEST_VERSION_FIELD: ManifestFieldDefinition((int,), "integer 3"),
+        "source_owner": ManifestFieldDefinition(
+            (str,), "a non-empty string", required=False, non_empty=True
+        ),
+        "source_acquired_date": ManifestFieldDefinition(
+            (str,), "an ISO date string", required=False, non_empty=True
+        ),
+        "source_reference": ManifestFieldDefinition(
+            (str,), "a non-empty string", required=False, non_empty=True
+        ),
+        "source_checksum": ManifestFieldDefinition(
+            (str,),
+            "a 64-character hexadecimal SHA-256 string",
+            required=False,
+            non_empty=True,
+        ),
+    }
+)
+
 MANIFEST_CONTRACTS = MappingProxyType({
     1: MANIFEST_V1_FIELDS,
     2: MANIFEST_V2_FIELDS,
+    3: MANIFEST_V3_FIELDS,
 })
 
 

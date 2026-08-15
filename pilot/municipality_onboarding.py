@@ -29,6 +29,11 @@ from pilot.onboarding_manifest_contract import (
     get_required_manifest_fields,
     validate_manifest_contract,
 )
+from pilot.source_provenance import (
+    SourceProvenance,
+    SourceChecksumResult,
+    verify_source_checksum,
+)
 
 
 # Phase 8 compatibility aliases, now derived from the versioned contract.
@@ -80,6 +85,26 @@ def parse_onboarding_manifest(
         ),
         source_column_mapping=manifest["column_mapping"],
         canonical_defaults=manifest["canonical_defaults"],
+        source_provenance=(
+            None
+            if manifest_version < 3
+            or not any(
+                field in manifest
+                for field in (
+                    "source_owner",
+                    "source_acquired_date",
+                    "source_reference",
+                    "source_checksum",
+                )
+            )
+            else SourceProvenance(
+                owner=manifest.get("source_owner", ""),
+                acquired_date=manifest.get("source_acquired_date", ""),
+                reference=manifest.get("source_reference", ""),
+                checksum=manifest.get("source_checksum"),
+            )
+        ),
+        onboarding_manifest_version=manifest_version,
     )
     validate_onboarding_configuration(config)
     return config
@@ -329,6 +354,11 @@ def load_onboarded_canonical_inventory(
         raise ValueError(
             f"Municipality '{config.slug}' source inventory CSV at '{path}' could not be read: {exc}"
         ) from exc
+    verify_source_checksum(
+        path,
+        config.source_provenance,
+        municipality_slug=config.slug,
+    )
     canonical = map_source_to_canonical(
         config,
         source_roads,
@@ -350,19 +380,24 @@ def prepare_manifest_inventory(
 ) -> tuple[MunicipalityConfig, pd.DataFrame]:
     """Run a manifest source through the existing validated onboarding pipeline."""
 
-    _, config, inventory = _prepare_manifest_inventory_details(manifest_path)
+    _, config, inventory, _ = _prepare_manifest_inventory_details(manifest_path)
     return config, inventory
 
 
 def _prepare_manifest_inventory_details(
     manifest_path: str | Path,
-) -> tuple[int, MunicipalityConfig, pd.DataFrame]:
+) -> tuple[int, MunicipalityConfig, pd.DataFrame, SourceChecksumResult]:
     """Prepare CLI details without adding manifest fields to the config model."""
 
     path, manifest = _read_onboarding_manifest_document(manifest_path)
     config = parse_onboarding_manifest(manifest, path)
     inventory = load_onboarded_canonical_inventory(config)
-    return manifest["manifest_version"], config, inventory
+    checksum_result = verify_source_checksum(
+        config.data_path,
+        config.source_provenance,
+        municipality_slug=config.slug,
+    )
+    return manifest["manifest_version"], config, inventory, checksum_result
 
 
 def export_canonical_inventory(
@@ -419,12 +454,10 @@ def _print_onboarding_summary(
     manifest_path: Path,
     inventory: pd.DataFrame,
     output_path: Path | None,
+    checksum_result: SourceChecksumResult,
 ) -> None:
     mapping = dict(config.source_column_mapping or {})
     defaults = dict(config.canonical_defaults or {})
-    mapped_columns = ", ".join(
-        f"{source} -> {canonical}" for source, canonical in mapping.items()
-    )
     default_fields = ", ".join(defaults) if defaults else "none"
 
     print(f"Municipality: {config.formal_name} ({config.slug})")
@@ -433,7 +466,7 @@ def _print_onboarding_summary(
     print(f"Source CSV: {config.data_path}")
     print(f"Source rows: {len(inventory)}")
     print(f"Canonical rows: {len(inventory)}")
-    print(f"Mapped columns ({len(mapping)}): {mapped_columns}")
+    print(f"Mapped columns: {len(mapping)}")
     print(f"Defaults used ({len(defaults)}): {default_fields}")
     print(f"Inventory adapter: {config.inventory_adapter}")
     print(f"Scenario catalog: {config.scenario_catalog_id}")
@@ -441,6 +474,26 @@ def _print_onboarding_summary(
         f"Data status: {config.data_provenance.label} "
         f"({config.normalized_data_status})"
     )
+    source = config.source_provenance
+    missing_source_note = (
+        "not provided (legacy manifest)"
+        if manifest_version < 3
+        else "not provided (illustrative dataset)"
+    )
+    print(f"Source owner: {source.owner if source else missing_source_note}")
+    print(
+        "Source acquired: "
+        f"{source.acquired_date if source else missing_source_note}"
+    )
+    print(
+        "Source reference: "
+        f"{source.reference if source else missing_source_note}"
+    )
+    print(f"Actual SHA-256: {checksum_result.actual}")
+    if checksum_result.declared is None:
+        print("Declared checksum match: not declared")
+    else:
+        print("Declared checksum match: yes")
     if output_path is None:
         print("Output: no files written (dry run)")
     else:
@@ -513,7 +566,7 @@ def main(argv: list[str] | None = None) -> int:
 
     manifest_path = args.manifest.resolve()
     try:
-        manifest_version, config, inventory = _prepare_manifest_inventory_details(
+        manifest_version, config, inventory, checksum_result = _prepare_manifest_inventory_details(
             manifest_path
         )
         output_path = None
@@ -531,6 +584,7 @@ def main(argv: list[str] | None = None) -> int:
             manifest_path,
             inventory,
             output_path,
+            checksum_result,
         )
     except (TypeError, ValueError) as exc:
         print(f"Onboarding failed: {exc}", file=sys.stderr)

@@ -2,7 +2,7 @@
 
 This document describes the contract implemented by `pilot/canonical_inventory.py` and the additional source checks performed by `pilot/municipality_onboarding.py`. It is a reference for preparing a manifest, not a separate schema.
 
-Every field below is a required canonical column. Most fields may be supplied by one source column in `column_mapping` or by one value in `canonical_defaults`. Supplying both for the same canonical field is an error. In manifest version 2, top-level `data_status` is the authoritative onboarding intent and is injected when no row status is supplied.
+Every field below is a required canonical column. Most fields may be supplied by one source column in `column_mapping` or by one value in `canonical_defaults`. Supplying both for the same canonical field is an error. In manifest version 2 or 3, top-level `data_status` is the authoritative onboarding intent and is injected when no row status is supplied.
 
 | Canonical name | Expected type | Meaning | Example | Mapping or default |
 | --- | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ Every field below is a required canonical column. Most fields may be supplied by
 | `freeze_thaw` | Text | Qualitative freeze-thaw exposure | `High` | Either; `High` and `Medium` affect current risk scoring. |
 | `recommended_treatment` | Text | Proposed pavement treatment | `Mill and Overlay` | Either; normalized after validation as described below. |
 | `treatment_cost_per_lane_mile` | Number | Planning cost per lane mile for the treatment | `400000` | Either |
-| `data_status` | Text | Inventory provenance state | `provisional` | Manifest v2 uses top-level `data_status`. A mapped/default row value is accepted only when every row agrees with configuration. |
+| `data_status` | Text | Inventory provenance state | `provisional` | Manifest v2/v3 uses top-level `data_status`. A mapped/default row value is accepted only when every row agrees with configuration. |
 | `data_source` | Text | Human-readable source description | `2026 pavement survey` | Either |
 | `data_updated_at` | Text | Source freshness or update date | `2026-08-14` | Either; currently retained as text, not parsed as a date. |
 
@@ -50,6 +50,8 @@ After canonical validation, treatment labels are normalized by the shared enrich
 
 There is no precedence rule for ordinary canonical fields. If a canonical field appears as a mapping target and in `canonical_defaults`, onboarding fails. Remove one of the two definitions. Defaults apply the same value to every source row, so they are appropriate for agency-wide constants but usually inappropriate for unique identifiers.
 
-`data_status` has an additional safeguard. Manifest v2 requires explicit top-level intent. If the source mapping or defaults also supply row status, every row must resolve to that same configured value. A contradiction fails before export. Manifest v1 remains supported as an illustrative-only compatibility contract.
+`data_status` has an additional safeguard. Manifest v2/v3 requires explicit top-level intent. If the source mapping or defaults also supply row status, every row must resolve to that same configured value. A contradiction fails before export. Manifest v1 remains supported as an illustrative-only compatibility contract.
+
+Dataset-level source owner, acquisition date, source reference, and optional checksum are deliberately not canonical road columns. They belong to `MunicipalityConfig.source_provenance`, so they are validated and reported once without duplicating identical metadata across every segment. Canonical exports remain deterministic and unchanged. See [DATA_PROVENANCE.md](DATA_PROVENANCE.md).
 
 See [MUNICIPALITY_ONBOARDING.md](MUNICIPALITY_ONBOARDING.md) for the operator workflow.

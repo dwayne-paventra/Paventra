@@ -17,6 +17,7 @@ def render_municipality_assumptions(config: MunicipalityConfig) -> None:
             "Scenario outcomes are planning estimates, not engineering forecasts or professional determinations. "
             f"No {config.formal_name} endorsement is implied."
         )
+        st.markdown(f"**Dataset source**  \n{config.source_provenance_label}")
         st.markdown(f"**{provenance.validation_heading}**")
         st.markdown(
             "- Official roadway and GIS inventory\n"

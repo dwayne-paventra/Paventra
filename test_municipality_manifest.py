@@ -111,15 +111,25 @@ class MunicipalityManifestTests(unittest.TestCase):
             get_optional_manifest_fields(),
             MANIFEST_OPTIONAL_FIELDS,
         )
-        self.assertEqual(MANIFEST_OPTIONAL_FIELDS, ())
-        self.assertEqual(set(contract), set(template))
+        self.assertEqual(
+            MANIFEST_OPTIONAL_FIELDS,
+            (
+                "source_owner",
+                "source_acquired_date",
+                "source_reference",
+                "source_checksum",
+            ),
+        )
+        self.assertTrue(set(template).issubset(contract))
+        self.assertTrue(set(MANIFEST_REQUIRED_FIELDS).issubset(template))
         for field, definition in contract.items():
             with self.subTest(field=field):
-                self.assertTrue(definition.required)
-                self.assertIsInstance(
-                    template[field],
-                    definition.accepted_types,
-                )
+                if definition.required:
+                    self.assertIn(field, template)
+                    self.assertIsInstance(
+                        template[field],
+                        definition.accepted_types,
+                    )
 
     def test_operator_template_is_contract_valid_and_complete(self):
         template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
@@ -131,6 +141,7 @@ class MunicipalityManifestTests(unittest.TestCase):
         self.assertEqual(template["manifest_version"], CURRENT_MANIFEST_VERSION)
         self.assertEqual(config.slug, "example_agency")
         self.assertEqual(config.normalized_data_status, "provisional")
+        self.assertEqual(config.source_provenance.owner, "Example Public Works Agency")
         self.assertEqual(supplied_canonical_fields, set(CANONICAL_COLUMNS))
 
     def test_canonical_documentation_tracks_every_implemented_field(self):

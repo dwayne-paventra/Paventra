@@ -12,6 +12,11 @@ from pilot.data_provenance import (
     get_data_provenance,
     normalize_data_status,
 )
+from pilot.source_provenance import (
+    SourceProvenance,
+    source_provenance_summary,
+    validate_source_provenance,
+)
 
 
 SUPPORTED_ENTITY_TYPES = frozenset({
@@ -48,6 +53,8 @@ class MunicipalityConfig:
     data_status: str = DEFAULT_DATA_STATUS
     source_column_mapping: Mapping[str, str] | None = None
     canonical_defaults: Mapping[str, Any] | None = None
+    source_provenance: SourceProvenance | None = None
+    onboarding_manifest_version: int | None = None
 
     @property
     def name(self) -> str:
@@ -82,6 +89,24 @@ class MunicipalityConfig:
         """Return centralized labels and safeguards for the configured status."""
 
         return get_data_provenance(self.data_status)
+
+    @property
+    def source_provenance_cache_key(self) -> str:
+        """Return a deterministic cache key for dataset-level traceability metadata."""
+
+        if self.source_provenance is None:
+            return f"legacy:{self.onboarding_manifest_version or 'none'}"
+        return self.source_provenance.cache_key
+
+    @property
+    def source_provenance_label(self) -> str:
+        """Return concise source metadata language for generic UI and reports."""
+
+        return source_provenance_summary(
+            self.source_provenance,
+            data_status=self.data_status,
+            legacy_manifest_version=self.onboarding_manifest_version,
+        )
 
 
 def validate_municipality_config(config: MunicipalityConfig) -> None:
@@ -121,6 +146,21 @@ def validate_municipality_config(config: MunicipalityConfig) -> None:
         normalize_data_status(config.data_status)
     except ValueError as exc:
         raise ValueError(f"Municipality '{identity}' {exc}") from exc
+
+    if (
+        config.onboarding_manifest_version is not None
+        and config.onboarding_manifest_version not in (1, 2, 3)
+    ):
+        raise ValueError(
+            f"Municipality '{identity}' field 'onboarding_manifest_version' has "
+            f"unsupported value '{config.onboarding_manifest_version}'."
+        )
+    validate_source_provenance(
+        config.source_provenance,
+        data_status=config.data_status,
+        municipality_slug=identity,
+        legacy_manifest_version=config.onboarding_manifest_version,
+    )
 
     if config.entity_type.strip().lower() not in SUPPORTED_ENTITY_TYPES:
         supported = ", ".join(sorted(SUPPORTED_ENTITY_TYPES))

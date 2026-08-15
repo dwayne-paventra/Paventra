@@ -20,10 +20,11 @@ def load_cached_municipality_inventory(
     data_path: str,
     modified_at_ns: int,
     data_status: str,
+    source_provenance_key: str,
 ):
     """Cache municipality inventory validation and enrichment."""
 
-    del data_path, modified_at_ns, data_status  # Deliberately part of the cache key.
+    del data_path, modified_at_ns, data_status, source_provenance_key
     from pilot.municipality_data import load_municipality_inventory
 
     return load_municipality_inventory(get_municipality_config(municipality_slug))
@@ -53,6 +54,7 @@ def build_cached_municipality_scenario(
 def build_cached_municipality_report(
     municipality_slug: str,
     data_status: str,
+    source_provenance_key: str,
     roads,
     results: dict,
     dataset_version: int,
@@ -61,7 +63,7 @@ def build_cached_municipality_report(
 ) -> bytes:
     """Build the requested PDF once per data, scenario, date, and template version."""
 
-    del data_status, dataset_version, report_date, report_version  # Deliberately part of the cache key.
+    del data_status, source_provenance_key, dataset_version, report_date, report_version
     from components.municipality_report import build_municipality_report
 
     return build_municipality_report(
@@ -89,6 +91,7 @@ def render_municipality_pilot() -> None:
         str(data_path),
         dataset_version,
         ACTIVE_MUNICIPALITY.normalized_data_status,
+        ACTIVE_MUNICIPALITY.source_provenance_cache_key,
     )
 
     render_municipality_executive_overview(ACTIVE_MUNICIPALITY, municipality_roads)
@@ -140,11 +143,12 @@ def render_municipality_pilot() -> None:
         report_bytes = build_cached_municipality_report(
             ACTIVE_MUNICIPALITY.slug,
             ACTIVE_MUNICIPALITY.normalized_data_status,
+            ACTIVE_MUNICIPALITY.source_provenance_cache_key,
             municipality_roads,
             municipality_results,
             dataset_version,
             date.today().isoformat(),
-            "municipality-pilot-report-v1.3",
+            "municipality-pilot-report-v1.4",
         )
         from components.municipality_report import render_municipality_report
 
@@ -346,6 +350,7 @@ else:
             str(data_path),
             data_path.stat().st_mtime_ns,
             ACTIVE_MUNICIPALITY.normalized_data_status,
+            ACTIVE_MUNICIPALITY.source_provenance_cache_key,
         )
 
     roads = load_roads()

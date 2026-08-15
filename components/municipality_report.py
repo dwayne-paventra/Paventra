@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from io import BytesIO
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -11,7 +12,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from pilot.municipality_config import MunicipalityConfig
+from pilot.municipality_config import MunicipalityConfig, validate_municipality_config
 from pilot.data_provenance import resolve_inventory_data_status
 
 
@@ -58,6 +59,7 @@ def build_municipality_report(
         spaceBefore=12,
     )
     body = styles["BodyText"]
+    validate_municipality_config(config)
     resolve_inventory_data_status(
         roads,
         expected_status=config.normalized_data_status,
@@ -100,6 +102,8 @@ def build_municipality_report(
         ("PADDING", (0, 0), (-1, -1), 7),
     ]))
     story.append(metric_table)
+    story.append(Paragraph("Dataset source provenance", heading))
+    story.append(Paragraph(escape(config.source_provenance_label), body))
     story.append(Paragraph("Investment scenario and recommended investments", heading))
     investment_rows = [["Rank", "Road", "Treatment", "Cost", "PCI", "Risk"]]
     for _, road in results["roads"].iterrows():

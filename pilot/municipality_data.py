@@ -17,6 +17,14 @@ def _load_canonical_demo_inventory(config: MunicipalityConfig) -> pd.DataFrame:
     """Load a canonical demonstration CSV through the shared adapter."""
 
     from pilot.canonical_inventory import load_streamlit_inventory
+    from pilot.source_provenance import verify_source_checksum
+
+    if config.source_provenance is not None:
+        verify_source_checksum(
+            config.data_path,
+            config.source_provenance,
+            municipality_slug=config.slug,
+        )
 
     return load_streamlit_inventory(
         config.data_path,

@@ -38,6 +38,7 @@ from pilot.municipality_registry import (
     ONBOARDING_DEMO_MUNICIPALITY,
 )
 from pilot.municipality_scenarios import build_municipality_scenario_results
+from pilot.source_provenance import SourceProvenance
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -47,6 +48,11 @@ TEMPLATE_PATH = PROJECT_ROOT / "docs" / "manifest.template.json"
 class DataProvenanceTests(unittest.TestCase):
     def setUp(self):
         self.raw = pd.read_csv(JACKSON_MUNICIPALITY.data_path)
+        self.source_provenance = SourceProvenance(
+            owner="City of Jackson",
+            acquired_date="2026-08-15",
+            reference="Jackson inventory delivery",
+        )
 
     def test_supported_statuses_and_legacy_alias_normalize_deterministically(self):
         cases = {
@@ -90,7 +96,13 @@ class DataProvenanceTests(unittest.TestCase):
             ("official", "explicitly configured as official"),
         ):
             with self.subTest(status=status):
-                config = replace(JACKSON_MUNICIPALITY, data_status=status)
+                config = replace(
+                    JACKSON_MUNICIPALITY,
+                    data_status=status,
+                    source_provenance=(
+                        None if status == "illustrative" else self.source_provenance
+                    ),
+                )
                 status_roads = roads.assign(data_status=status)
                 report = build_municipality_report(config, status_roads, results)
                 self.assertIn(notice_text, config.pilot_disclaimer)
@@ -106,7 +118,11 @@ class DataProvenanceTests(unittest.TestCase):
                 return_value=nullcontext(),
             ), patch("streamlit.markdown") as markdown:
                 render_municipality_assumptions(
-                    replace(JACKSON_MUNICIPALITY, data_status=status)
+                    replace(
+                        JACKSON_MUNICIPALITY,
+                        data_status=status,
+                        source_provenance=self.source_provenance,
+                    )
                 )
                 rendered = " ".join(
                     str(call.args[0]) for call in markdown.call_args_list
@@ -147,7 +163,7 @@ class DataProvenanceTests(unittest.TestCase):
                 self.assertTrue(roads["data_status"].eq("illustrative").all())
                 self.assertIn("Not an official", config.pilot_disclaimer)
 
-    def test_manifest_v2_requires_explicit_status_and_v1_is_illustrative_only(self):
+    def test_manifest_v3_requires_explicit_status_and_v1_is_illustrative_only(self):
         template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
         missing = deepcopy(template)
         del missing["data_status"]
@@ -156,6 +172,7 @@ class DataProvenanceTests(unittest.TestCase):
 
         config = parse_onboarding_manifest(template, TEMPLATE_PATH)
         self.assertEqual(config.normalized_data_status, "provisional")
+        self.assertEqual(config.onboarding_manifest_version, 3)
         self.assertEqual(ONBOARDING_DEMO_MUNICIPALITY.normalized_data_status, "illustrative")
 
     def test_mapped_status_must_agree_with_configuration(self):
