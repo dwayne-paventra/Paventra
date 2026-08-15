@@ -127,6 +127,8 @@ class MunicipalityPortfolioEntry:
     registration_date: str | None = None
     registration_state: str | None = None
     registered_data_path: Path | None = None
+    active_data_version: int | None = None
+    available_data_versions: tuple[int, ...] = ()
 
     @property
     def dashboard_launchable(self) -> bool:
@@ -222,13 +224,14 @@ def assert_slug_available(
     *,
     generated_root: Path = GENERATED_MUNICIPALITIES_ROOT,
     archived_root: Path | None = None,
+    allow_registered_slug: bool = False,
 ) -> Path:
     """Reject permanent or generated slug collisions before any write."""
 
     from pilot.municipality_registry import MUNICIPALITIES
 
     destination = _package_directory(slug, generated_root)
-    if slug in MUNICIPALITIES:
+    if slug in MUNICIPALITIES and not allow_registered_slug:
         raise ValueError(f"Municipality slug '{slug}' is already permanently registered.")
     if destination.exists():
         raise ValueError(
@@ -677,6 +680,7 @@ def save_real_import_draft(
     declared_checksum: str | None = None,
     source_field_meanings: Mapping[str, str] | None = None,
     generated_root: Path = GENERATED_MUNICIPALITIES_ROOT,
+    allow_registered_slug: bool = False,
 ) -> Path:
     """Create or update a resumable real-import workspace without claiming validation."""
 
@@ -706,7 +710,11 @@ def save_real_import_draft(
         except ValueError:
             previous_state = PackageLifecycleState.VALIDATION_REQUIRED
     else:
-        destination = assert_slug_available(identity.slug, generated_root=generated_root)
+        destination = assert_slug_available(
+            identity.slug,
+            generated_root=generated_root,
+            allow_registered_slug=allow_registered_slug,
+        )
         destination.mkdir(parents=True, exist_ok=False)
 
     filtered_mapping = {
@@ -838,6 +846,7 @@ def _permanent_portfolio_entries() -> list[MunicipalityPortfolioEntry]:
         try:
             from pilot.municipality_registration import (
                 PERSISTENT_MUNICIPALITIES_ROOT,
+                _registration_metadata,
                 get_persistent_registration,
             )
 
@@ -874,6 +883,11 @@ def _permanent_portfolio_entries() -> list[MunicipalityPortfolioEntry]:
             registration_date=(persistent.registered_at_utc if persistent else None),
             registration_state=(persistent.registration_state if persistent else None),
             registered_data_path=(persistent.registration_path if persistent else None),
+            active_data_version=(persistent.active_data_version if persistent else None),
+            available_data_versions=(
+                tuple(_registration_metadata(persistent.registration_path)["available_data_versions"])
+                if persistent else ()
+            ),
         ))
     return entries
 

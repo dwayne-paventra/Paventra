@@ -35,6 +35,16 @@ def municipality_report_filename(config: MunicipalityConfig) -> str:
     return f"{config.slug}_transportation_investment_scenario.pdf"
 
 
+def municipality_report_data_version(config: MunicipalityConfig, roads) -> str:
+    """Resolve the operator-facing version without exposing internal paths."""
+
+    if config.data_version is not None:
+        return str(config.data_version)
+    if "data_updated_at" in roads.columns:
+        return str(roads["data_updated_at"].max())
+    return "Unspecified dataset version"
+
+
 def build_municipality_report(
     config: MunicipalityConfig,
     roads,
@@ -80,11 +90,7 @@ def build_municipality_report(
         municipality_slug=config.slug,
     )
     provenance = config.data_provenance
-    data_version = (
-        str(roads["data_updated_at"].max())
-        if "data_updated_at" in roads.columns
-        else "Unspecified dataset version"
-    )
+    data_version = municipality_report_data_version(config, roads)
     story = [Paragraph(f"Paventra | {escape(config.pilot_name)}", heading)]
     story.append(Paragraph(escape(municipality_report_title(config)), title))
     story.append(Paragraph(

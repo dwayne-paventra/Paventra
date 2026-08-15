@@ -88,6 +88,9 @@ class MunicipalityConfig:
     canonical_defaults: Mapping[str, Any] | None = None
     source_provenance: SourceProvenance | None = None
     onboarding_manifest_version: int | None = None
+    # Runtime-only metadata for filesystem-backed permanent registrations.
+    # It is not part of the municipality onboarding manifest contract.
+    data_version: int | None = None
 
     @property
     def name(self) -> str:

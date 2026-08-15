@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -207,6 +207,23 @@ def _registration_metadata(directory: Path) -> dict[str, Any]:
         )
     if metadata["validation_result"] != "PASS":
         raise ValueError("Persistent registration validation_result must be 'PASS'.")
+    available = metadata.get("available_data_versions", [metadata["active_data_version"]])
+    if (
+        not isinstance(available, list)
+        or not available
+        or any(isinstance(item, bool) or not isinstance(item, int) or item < 1 for item in available)
+        or len(set(available)) != len(available)
+        or available != sorted(available)
+    ):
+        raise ValueError(
+            "Persistent registration field 'available_data_versions' must be a sorted "
+            "list of unique positive integers."
+        )
+    if metadata["active_data_version"] not in available:
+        raise ValueError("Persistent registration active_data_version is not available.")
+    metadata["available_data_versions"] = available
+    metadata.setdefault("previous_active_data_version", None)
+    metadata.setdefault("active_version_activated_at_utc", metadata["registered_at_utc"])
     return metadata
 
 
@@ -224,7 +241,10 @@ def load_persistent_registration_directory(directory: str | Path) -> RegisteredM
         metadata["canonical_inventory_path"],
         "canonical_inventory_path",
     )
-    config = load_onboarding_manifest(manifest_path)
+    config = replace(
+        load_onboarding_manifest(manifest_path),
+        data_version=metadata["active_data_version"],
+    )
     if config.slug != metadata["slug"]:
         raise ValueError(
             f"Persistent registration '{metadata_path}' slug does not match its manifest."
@@ -234,6 +254,16 @@ def load_persistent_registration_directory(directory: str | Path) -> RegisteredM
         raise ValueError("Active manifest is not inside its declared version directory.")
     if version_root.resolve() not in config.data_path.resolve().parents:
         raise ValueError("Registered source path is not inside its active version directory.")
+    actual_versions = sorted(
+        int(item.name)
+        for item in (registration_path / "versions").iterdir()
+        if item.is_dir() and item.name.isdigit() and int(item.name) > 0
+    )
+    if actual_versions != metadata["available_data_versions"]:
+        raise ValueError(
+            f"Persistent registration '{config.slug}' available versions do not match "
+            "its immutable version directories."
+        )
     if compute_source_checksum(config.data_path) != metadata["source_checksum"]:
         raise ValueError(f"Persistent registration '{config.slug}' source checksum does not match.")
     if compute_source_checksum(canonical_path) != metadata["canonical_checksum"]:
@@ -502,6 +532,9 @@ def _copy_registration_snapshot(package: Path, staging: Path, preview: Registrat
         "slug": preview.slug,
         "registration_version": INITIAL_REGISTRATION_VERSION,
         "active_data_version": INITIAL_DATA_VERSION,
+        "available_data_versions": [INITIAL_DATA_VERSION],
+        "previous_active_data_version": None,
+        "active_version_activated_at_utc": _utc_timestamp(),
         "registration_state": RegistrationState.PENDING_ACCEPTANCE,
         "registered_at_utc": _utc_timestamp(),
         "accepted_at_utc": None,
@@ -530,7 +563,25 @@ def _copy_registration_snapshot(package: Path, staging: Path, preview: Registrat
         "validation_result": "PASS",
         "source_package_path": str(package),
     }
+    version_record = {
+        "data_version": INITIAL_DATA_VERSION,
+        "manifest_path": metadata["active_manifest_path"],
+        "canonical_inventory_path": metadata["canonical_inventory_path"],
+        "created_at_utc": metadata["registered_at_utc"],
+        "activated_at_utc": metadata["active_version_activated_at_utc"],
+        "source_checksum": preview.source_checksum,
+        "canonical_checksum": preview.canonical_checksum,
+        "readiness_fingerprint": source_manifest["readiness_fingerprint"],
+        "configuration_snapshot": metadata["configuration_snapshot"],
+        "mapping_snapshot": metadata["mapping_snapshot"],
+        "defaults_snapshot": metadata["defaults_snapshot"],
+        "data_status": preview.data_status,
+        "source_provenance": metadata["source_provenance"],
+        "row_count": preview.segment_count,
+    }
+    metadata["version_records"] = {str(INITIAL_DATA_VERSION): version_record}
     _write_json_atomic(staging / REGISTRATION_METADATA_NAME, metadata)
+    _write_json_atomic(version_root / "version.json", version_record)
 
 
 def verify_registered_municipality(directory: str | Path) -> RegisteredMunicipality:

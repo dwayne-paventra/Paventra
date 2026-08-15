@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+from io import BytesIO
 import json
 
 import pandas as pd
@@ -16,7 +18,22 @@ from pilot.municipality_admin import (
     clone_illustrative_demo,
     filter_municipality_portfolio,
     restore_archived_demo,
+    suggest_column_mappings,
     suggest_municipality_slug,
+)
+from pilot.canonical_inventory import CANONICAL_COLUMNS
+from pilot.municipality_data_versions import (
+    UpdateLifecycleState,
+    activate_update,
+    activation_preview,
+    begin_update_review,
+    create_update_workspace,
+    inspect_update_workspace,
+    list_update_workspaces,
+    mark_update_ready,
+    rollback_active_version,
+    validate_update_workspace,
+    version_history,
 )
 from pilot.municipality_package_lifecycle import (
     build_mapping_review,
@@ -90,6 +107,271 @@ def _clone_form(entry) -> None:
                 st.error(str(exc))
 
 
+def _persistent_version_controls(entry) -> None:
+    """Render permanent-version history and isolated candidate update controls."""
+
+    st.subheader("Data Version History")
+    history = version_history(entry.slug)
+    st.dataframe(pd.DataFrame(history), hide_index=True, width="stretch")
+    st.caption(
+        "Historical versions are immutable. Active/superseded labels come from the explicit "
+        "registration pointer, not the highest directory number."
+    )
+    prior_versions = [
+        item["data_version"] for item in history
+        if item["data_version"] != entry.active_data_version
+    ]
+    if prior_versions:
+        target = st.selectbox(
+            "View or roll back to version",
+            prior_versions,
+            key=f"version_history_target_{entry.slug}",
+        )
+        selected = next(item for item in history if item["data_version"] == target)
+        st.dataframe(pd.DataFrame([selected]), hide_index=True, width="stretch")
+        st.write(
+            "Compare to active:",
+            {
+                "selected_version": target,
+                "active_version": entry.active_data_version,
+                "row_count_change": (
+                    selected.get("row_count") - next(
+                        item.get("row_count") for item in history
+                        if item["data_version"] == entry.active_data_version
+                    )
+                    if isinstance(selected.get("row_count"), int)
+                    and isinstance(next(
+                        item.get("row_count") for item in history
+                        if item["data_version"] == entry.active_data_version
+                    ), int)
+                    else "Unavailable"
+                ),
+                "data_status_change": (
+                    selected.get("data_status"),
+                    next(item.get("data_status") for item in history
+                         if item["data_version"] == entry.active_data_version),
+                ),
+            },
+        )
+        rollback_text = st.text_input(
+            f"Type `{entry.slug} version {target}` to confirm version rollback",
+            key=f"version_rollback_text_{entry.slug}",
+        )
+        rollback_confirmed = st.checkbox(
+            "I understand rollback changes only the active pointer and deletes no versions",
+            key=f"version_rollback_confirm_{entry.slug}",
+        )
+        if st.button(
+            "Roll Back Active Data Version",
+            key=f"version_rollback_{entry.slug}",
+            disabled=(
+                not rollback_confirmed
+                or rollback_text != f"{entry.slug} version {target}"
+            ),
+        ):
+            try:
+                rollback_active_version(
+                    entry.slug,
+                    target,
+                    confirmation=rollback_text,
+                    confirmed=rollback_confirmed,
+                )
+                refresh_persistent_municipalities()
+                st.success(f"Data version {target} is now active; no version was deleted.")
+                st.rerun()
+            except (OSError, TypeError, ValueError) as exc:
+                st.error(str(exc))
+
+    with st.expander("Upload New Inventory", expanded=False):
+        st.caption(
+            "Creates the deterministic next candidate version. Current active and historical "
+            "versions remain untouched until explicit activation."
+        )
+        uploaded = st.file_uploader(
+            "Upload candidate road inventory CSV",
+            type=["csv"],
+            key=f"version_upload_{entry.slug}",
+        )
+        owner = st.text_input("Source owner", key=f"version_owner_{entry.slug}")
+        acquired = st.date_input(
+            "Acquisition or extraction date",
+            value=date.today(),
+            key=f"version_date_{entry.slug}",
+        )
+        reference = st.text_input("Source reference", key=f"version_reference_{entry.slug}")
+        status_options = ["provisional", "official", "illustrative"]
+        status = st.selectbox(
+            "Candidate data status",
+            status_options,
+            index=status_options.index(entry.data_status)
+            if entry.data_status in status_options else 0,
+            key=f"version_status_{entry.slug}",
+        )
+        mapping: dict[str, str] = {}
+        defaults: dict[str, str] = {}
+        content = uploaded.getvalue() if uploaded is not None else b""
+        headers: list[str] = []
+        if content:
+            try:
+                headers = list(pd.read_csv(BytesIO(content), nrows=0).columns)
+            except Exception as exc:
+                st.error(f"Candidate CSV headers could not be read: {exc}")
+        if headers:
+            active_mapping = dict(entry.config.source_column_mapping or {})
+            suggestions = suggest_column_mappings(headers)
+            st.caption("Mappings are prefilled from the active version where columns still match.")
+            for index, header in enumerate(headers):
+                initial = (
+                    active_mapping.get(header)
+                    if active_mapping
+                    else suggestions.get(header)
+                )
+                options = ["Unmapped", *CANONICAL_COLUMNS]
+                selected = st.selectbox(
+                    header,
+                    options,
+                    index=options.index(initial) if initial in options else 0,
+                    key=f"version_mapping_{entry.slug}_{index}",
+                )
+                if selected != "Unmapped":
+                    mapping[header] = selected
+            mapped = set(mapping.values())
+            with st.expander("Defaults for unresolved canonical fields"):
+                for column in CANONICAL_COLUMNS:
+                    if column in mapped:
+                        continue
+                    value = st.text_input(
+                        column,
+                        value=str((entry.config.canonical_defaults or {}).get(column, "")),
+                        key=f"version_default_{entry.slug}_{column}",
+                    )
+                    if value.strip():
+                        defaults[column] = value.strip()
+        provenance_confirmed = st.checkbox(
+            "I confirm this source provenance and data status for the candidate version",
+            key=f"version_provenance_confirm_{entry.slug}",
+        )
+        if st.button(
+            "Create Candidate Update",
+            key=f"version_create_{entry.slug}",
+            disabled=not (content and provenance_confirmed),
+        ):
+            try:
+                active_mapping = dict(entry.config.source_column_mapping or {})
+                active_defaults = dict(entry.config.canonical_defaults or {})
+                workspace = create_update_workspace(
+                    entry.slug,
+                    content,
+                    source_owner=owner,
+                    acquired_date=acquired.isoformat(),
+                    source_reference=reference,
+                    data_status=status,
+                    mapping=None if mapping == active_mapping else mapping,
+                    defaults=None if defaults == active_defaults else defaults,
+                    provenance_confirmed=provenance_confirmed,
+                )
+                st.success(f"Candidate update workspace created: {workspace}")
+                st.rerun()
+            except (OSError, TypeError, ValueError) as exc:
+                st.error(str(exc))
+
+    workspaces = list_update_workspaces(entry.slug)
+    if not workspaces:
+        return
+    labels = {
+        f"Version {inspect_update_workspace(path).candidate_version}": path
+        for path in workspaces
+    }
+    selected_label = st.selectbox(
+        "Candidate update workspace",
+        list(labels),
+        key=f"version_workspace_{entry.slug}",
+    )
+    workspace = labels[selected_label]
+    inspection = inspect_update_workspace(workspace)
+    st.write(
+        "Candidate state:", inspection.state.value,
+        "· Candidate version:", inspection.candidate_version,
+        "· Mapping reused:", inspection.mapping_reused,
+        "· Defaults reused:", inspection.defaults_reused,
+    )
+    if inspection.blocking_issues:
+        for issue in inspection.blocking_issues:
+            st.error(f"{issue.field}: {issue.message}")
+    if inspection.comparison is not None:
+        comparison = inspection.comparison.as_dict()
+        st.subheader("Version Comparison")
+        st.dataframe(pd.DataFrame([{
+            key: value for key, value in comparison.items()
+            if key not in {"issues", "added_segment_ids", "removed_segment_ids",
+                           "added_road_ids", "removed_road_ids"}
+        }]), hide_index=True, width="stretch")
+        st.json({
+            key: comparison[key]
+            for key in ("added_segment_ids", "removed_segment_ids",
+                        "added_road_ids", "removed_road_ids", "issues")
+        })
+    if inspection.state in {UpdateLifecycleState.DRAFT, UpdateLifecycleState.VALIDATION_REQUIRED}:
+        if st.button("Validate Candidate Update", key=f"version_validate_{entry.slug}"):
+            validate_update_workspace(workspace)
+            st.rerun()
+    elif inspection.state == UpdateLifecycleState.VALIDATED:
+        if st.button("Begin Candidate Review", key=f"version_review_{entry.slug}"):
+            begin_update_review(workspace)
+            st.rerun()
+    elif inspection.state == UpdateLifecycleState.REVIEW_REQUIRED:
+        if st.button("Mark Ready for Activation", key=f"version_ready_{entry.slug}"):
+            mark_update_ready(workspace)
+            st.rerun()
+    elif inspection.state == UpdateLifecycleState.READY_FOR_ACTIVATION:
+        if st.button("Activation Preview", key=f"version_preview_{entry.slug}"):
+            st.session_state[f"version_preview_result_{entry.slug}"] = activation_preview(workspace)
+        preview = st.session_state.get(f"version_preview_result_{entry.slug}")
+        if preview is not None:
+            st.dataframe(pd.DataFrame([{
+                "Municipality": preview.formal_name,
+                "Current version": preview.current_active_version,
+                "Candidate version": preview.candidate_version,
+                "Current source checksum": preview.current_source_checksum,
+                "Candidate source checksum": preview.candidate_source_checksum,
+                "Current canonical checksum": preview.current_canonical_checksum,
+                "Candidate canonical checksum": preview.candidate_canonical_checksum,
+                "Old rows": preview.old_row_count,
+                "New rows": preview.new_row_count,
+                "Row change": preview.row_count_change,
+                "Status change": f"{preview.current_data_status} → {preview.candidate_data_status}",
+                "Source owner": preview.source_owner,
+                "Source date": preview.source_date,
+                "Source reference": preview.source_reference,
+                "Destination": str(preview.activation_destination),
+                "Result": preview.result,
+            }]), hide_index=True, width="stretch")
+            expected = f"{entry.slug} version {preview.candidate_version}"
+            text = st.text_input(
+                f"Type `{expected}` to confirm activation",
+                key=f"version_activate_text_{entry.slug}",
+            )
+            confirmed = st.checkbox(
+                "I confirm activation changes the active dataset pointer",
+                key=f"version_activate_confirm_{entry.slug}",
+            )
+            if st.button(
+                "Activate Candidate Version",
+                key=f"version_activate_{entry.slug}",
+                disabled=(preview.result != "PASS" or not confirmed or text != expected),
+            ):
+                try:
+                    activate_update(
+                        workspace, confirmation=text, confirmed=confirmed
+                    )
+                    refresh_persistent_municipalities()
+                    st.success(f"Data version {preview.candidate_version} activated and verified.")
+                    st.session_state.pop(f"version_preview_result_{entry.slug}", None)
+                    st.rerun()
+                except (OSError, TypeError, ValueError) as exc:
+                    st.error(str(exc))
+
+
 def _details(entry) -> None:
     st.subheader(f"Municipality details: {entry.formal_name}")
     config = entry.config
@@ -127,6 +409,8 @@ def _details(entry) -> None:
         if entry.registration_version is not None:
             st.write("Registration version:", entry.registration_version)
             st.write("Registration date:", entry.registration_date)
+            st.write("Active data version:", entry.active_data_version)
+            st.write("Available data versions:", list(entry.available_data_versions))
             st.write(
                 "Registration acceptance:",
                 "Accepted" if entry.registration_state == RegistrationState.ACCEPTED
@@ -351,6 +635,7 @@ def _details(entry) -> None:
                 "Accepted registrations cannot be casually rolled back. Removal is restricted "
                 "to a deliberate developer-controlled process."
             )
+        _persistent_version_controls(entry)
 
     if entry.package_type == "illustrative_demo":
         with st.expander("Pre-meeting demo readiness checklist"):
@@ -444,6 +729,7 @@ def render_municipality_portfolio() -> None:
             "Readiness": entry.readiness_state,
             "Registration version": entry.registration_version or "—",
             "Registration date": entry.registration_date or "—",
+            "Active data version": entry.active_data_version or "—",
         } for entry in filtered]),
         hide_index=True,
         width="stretch",
