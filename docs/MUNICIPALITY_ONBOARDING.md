@@ -4,6 +4,8 @@ This runbook is for the person preparing a new Paventra municipality inventory. 
 
 The onboarding tools validate and transform data. They do not register a municipality automatically, modify the dashboard, or change the source file.
 
+For a real engagement, complete [FIRST_PILOT_CHECKLIST.md](FIRST_PILOT_CHECKLIST.md) under the intake and review rules in [FIRST_PILOT_INTAKE.md](FIRST_PILOT_INTAKE.md). This runbook supplies the commands; [CANONICAL_INVENTORY.md](CANONICAL_INVENTORY.md) and [DATA_PROVENANCE.md](DATA_PROVENANCE.md) remain the authoritative technical and provenance contracts.
+
 ## Before starting
 
 Confirm Python and the project dependencies are available:
@@ -25,7 +27,7 @@ Copy-Item C:\Incoming\roads.csv data\example_township\source_roads.raw.csv
 Copy-Item data\example_township\source_roads.raw.csv data\example_township\source_roads.csv
 ```
 
-Never edit `source_roads.raw.csv`. If corrections are necessary, make them in `source_roads.csv` and record what changed outside Paventra according to the project’s data-governance practice.
+Never edit `source_roads.raw.csv`. For the first real pilot, keep `source_roads.csv` byte-identical so the existing CLI checksum represents the preserved delivery. If source values require correction, request and preserve a revised municipal delivery, then restart intake for that version. Use mappings and justified canonical defaults for interpretation; do not silently correct delivered values in the working CSV.
 
 ## 2. Copy and edit the manifest
 
@@ -182,4 +184,4 @@ With Streamlit running, check its local health endpoint:
 Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8501/_stcore/health
 ```
 
-Onboarding is complete only when the dry run passes, canonical review is acceptable, the registry change is reviewed, the selected municipality launches, its full flow works, and the repository verification suite passes.
+Onboarding is complete only when the dry run passes, canonical review is acceptable, the registry change is reviewed, the selected municipality launches, its full flow works, the repository verification suite passes, and the completed first-pilot checklist records a `GO` or justified `CONDITIONAL GO` decision.
