@@ -209,8 +209,11 @@ def get_active_municipality_config() -> MunicipalityConfig:
 ACTIVE_MUNICIPALITY = get_active_municipality_config()
 
 
-def is_active_municipality_pilot_mode() -> bool:
-    """Return whether the active municipality's pilot should be rendered."""
+def is_active_municipality_pilot_mode(
+    config: MunicipalityConfig | None = None,
+) -> bool:
+    """Return whether the selected municipality's pilot should be rendered."""
 
-    configured_mode = os.getenv(PILOT_MODE_ENV_VAR, ACTIVE_MUNICIPALITY.pilot_mode)
-    return configured_mode.strip().lower() == ACTIVE_MUNICIPALITY.pilot_mode
+    selected = config or ACTIVE_MUNICIPALITY
+    configured_mode = os.getenv(PILOT_MODE_ENV_VAR, selected.pilot_mode)
+    return configured_mode.strip().lower() == selected.pilot_mode

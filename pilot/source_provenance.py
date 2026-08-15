@@ -131,6 +131,14 @@ def compute_source_checksum(path: str | Path) -> str:
     return digest.hexdigest()
 
 
+def compute_content_checksum(content: bytes) -> str:
+    """Compute SHA-256 for uploaded source bytes using the provenance contract."""
+
+    if not isinstance(content, bytes):
+        raise ValueError("Source content must be bytes before checksum calculation.")
+    return hashlib.sha256(content).hexdigest()
+
+
 def verify_source_checksum(
     path: str | Path,
     provenance: SourceProvenance | None,

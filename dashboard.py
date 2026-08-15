@@ -14,6 +14,16 @@ from pilot.municipality_registry import (
 )
 
 
+def _resolve_dashboard_config(municipality_slug: str, runtime_slug: str | None = None):
+    """Resolve a permanent or explicitly selected generated municipality."""
+
+    if runtime_slug:
+        from pilot.municipality_admin import load_generated_municipality
+
+        return load_generated_municipality(runtime_slug)
+    return get_municipality_config(municipality_slug)
+
+
 @st.cache_data(show_spinner=False)
 def load_cached_municipality_inventory(
     municipality_slug: str,
@@ -21,13 +31,16 @@ def load_cached_municipality_inventory(
     modified_at_ns: int,
     data_status: str,
     source_provenance_key: str,
+    runtime_slug: str | None = None,
 ):
     """Cache municipality inventory validation and enrichment."""
 
     del data_path, modified_at_ns, data_status, source_provenance_key
     from pilot.municipality_data import load_municipality_inventory
 
-    return load_municipality_inventory(get_municipality_config(municipality_slug))
+    return load_municipality_inventory(
+        _resolve_dashboard_config(municipality_slug, runtime_slug)
+    )
 
 
 @st.cache_data(show_spinner=False)
@@ -60,6 +73,7 @@ def build_cached_municipality_report(
     dataset_version: int,
     report_date: str,
     report_version: str,
+    runtime_slug: str | None = None,
 ) -> bytes:
     """Build the requested PDF once per data, scenario, date, and template version."""
 
@@ -67,7 +81,7 @@ def build_cached_municipality_report(
     from components.municipality_report import build_municipality_report
 
     return build_municipality_report(
-        get_municipality_config(municipality_slug),
+        _resolve_dashboard_config(municipality_slug, runtime_slug),
         roads,
         results,
     )
@@ -81,20 +95,21 @@ def render_municipality_pilot() -> None:
 
     render_sidebar(
         pilot_mode=True,
-        pilot_notice=ACTIVE_MUNICIPALITY.pilot_disclaimer,
+        pilot_notice=DASHBOARD_MUNICIPALITY.pilot_disclaimer,
     )
 
-    data_path = ACTIVE_MUNICIPALITY.data_path
+    data_path = DASHBOARD_MUNICIPALITY.data_path
     dataset_version = data_path.stat().st_mtime_ns
     municipality_roads = load_cached_municipality_inventory(
-        ACTIVE_MUNICIPALITY.slug,
+        DASHBOARD_MUNICIPALITY.slug,
         str(data_path),
         dataset_version,
-        ACTIVE_MUNICIPALITY.normalized_data_status,
-        ACTIVE_MUNICIPALITY.source_provenance_cache_key,
+        DASHBOARD_MUNICIPALITY.normalized_data_status,
+        DASHBOARD_MUNICIPALITY.source_provenance_cache_key,
+        DASHBOARD_RUNTIME_SLUG,
     )
 
-    render_municipality_executive_overview(ACTIVE_MUNICIPALITY, municipality_roads)
+    render_municipality_executive_overview(DASHBOARD_MUNICIPALITY, municipality_roads)
     if st.button("Open investment briefing", key="municipality_open_briefing"):
         st.session_state["municipality_briefing_open"] = True
     if not st.session_state.get("municipality_briefing_open", False):
@@ -108,19 +123,19 @@ def render_municipality_pilot() -> None:
         render_municipality_scenario_selector,
     )
 
-    scenario_catalog = get_scenario_catalog(ACTIVE_MUNICIPALITY.scenario_catalog_id)
+    scenario_catalog = get_scenario_catalog(DASHBOARD_MUNICIPALITY.scenario_catalog_id)
     selected_scenario = render_municipality_scenario_selector(scenario_catalog)
     assumptions_version = json.dumps(scenario_catalog, sort_keys=True)
     municipality_results = build_cached_municipality_scenario(
         municipality_roads,
         selected_scenario,
-        ACTIVE_MUNICIPALITY.scenario_catalog_id,
+        DASHBOARD_MUNICIPALITY.scenario_catalog_id,
         dataset_version,
         assumptions_version,
     )
 
     st.markdown("### Investment recommendations")
-    render_municipality_recommendations(ACTIVE_MUNICIPALITY, municipality_results)
+    render_municipality_recommendations(DASHBOARD_MUNICIPALITY, municipality_results)
     render_municipality_scenario_impact(municipality_results)
 
     st.markdown("### Network Explorer")
@@ -131,7 +146,7 @@ def render_municipality_pilot() -> None:
         from components.municipality_map import render_municipality_map
 
         render_municipality_map(
-            ACTIVE_MUNICIPALITY,
+            DASHBOARD_MUNICIPALITY,
             municipality_roads,
             municipality_results,
         )
@@ -141,20 +156,21 @@ def render_municipality_pilot() -> None:
         st.session_state["municipality_report_requested"] = True
     if st.session_state.get("municipality_report_requested", False):
         report_bytes = build_cached_municipality_report(
-            ACTIVE_MUNICIPALITY.slug,
-            ACTIVE_MUNICIPALITY.normalized_data_status,
-            ACTIVE_MUNICIPALITY.source_provenance_cache_key,
+            DASHBOARD_MUNICIPALITY.slug,
+            DASHBOARD_MUNICIPALITY.normalized_data_status,
+            DASHBOARD_MUNICIPALITY.source_provenance_cache_key,
             municipality_roads,
             municipality_results,
             dataset_version,
             date.today().isoformat(),
             "municipality-pilot-report-v1.4",
+            DASHBOARD_RUNTIME_SLUG,
         )
         from components.municipality_report import render_municipality_report
 
-        render_municipality_report(ACTIVE_MUNICIPALITY, report_bytes)
+        render_municipality_report(DASHBOARD_MUNICIPALITY, report_bytes)
 
-    render_municipality_assumptions(ACTIVE_MUNICIPALITY)
+    render_municipality_assumptions(DASHBOARD_MUNICIPALITY)
 
 # ------------------------------------------------
 # Page Configuration
@@ -166,7 +182,23 @@ st.set_page_config(
     layout="wide"
 )
 
-municipality_pilot_mode = is_active_municipality_pilot_mode()
+DASHBOARD_RUNTIME_SLUG = st.session_state.get("paventra_runtime_municipality_slug")
+DASHBOARD_REGISTERED_SLUG = st.session_state.get("paventra_selected_municipality_slug")
+try:
+    if DASHBOARD_RUNTIME_SLUG:
+        DASHBOARD_MUNICIPALITY = _resolve_dashboard_config(
+            DASHBOARD_RUNTIME_SLUG,
+            DASHBOARD_RUNTIME_SLUG,
+        )
+    elif DASHBOARD_REGISTERED_SLUG:
+        DASHBOARD_MUNICIPALITY = get_municipality_config(DASHBOARD_REGISTERED_SLUG)
+    else:
+        DASHBOARD_MUNICIPALITY = ACTIVE_MUNICIPALITY
+except ValueError as exc:
+    st.error(f"Municipality selection could not be loaded: {exc}")
+    st.stop()
+
+municipality_pilot_mode = is_active_municipality_pilot_mode(DASHBOARD_MUNICIPALITY)
 
 from styles import load_css
 
@@ -344,13 +376,14 @@ else:
 
     @st.cache_data
     def load_roads():
-        data_path = ACTIVE_MUNICIPALITY.data_path
+        data_path = DASHBOARD_MUNICIPALITY.data_path
         return load_cached_municipality_inventory(
-            ACTIVE_MUNICIPALITY.slug,
+            DASHBOARD_MUNICIPALITY.slug,
             str(data_path),
             data_path.stat().st_mtime_ns,
-            ACTIVE_MUNICIPALITY.normalized_data_status,
-            ACTIVE_MUNICIPALITY.source_provenance_cache_key,
+            DASHBOARD_MUNICIPALITY.normalized_data_status,
+            DASHBOARD_MUNICIPALITY.source_provenance_cache_key,
+            DASHBOARD_RUNTIME_SLUG,
         )
 
     roads = load_roads()
