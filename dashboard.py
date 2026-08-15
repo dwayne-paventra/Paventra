@@ -19,10 +19,11 @@ def load_cached_municipality_inventory(
     municipality_slug: str,
     data_path: str,
     modified_at_ns: int,
+    data_status: str,
 ):
     """Cache municipality inventory validation and enrichment."""
 
-    del data_path, modified_at_ns  # Deliberately part of the cache key.
+    del data_path, modified_at_ns, data_status  # Deliberately part of the cache key.
     from pilot.municipality_data import load_municipality_inventory
 
     return load_municipality_inventory(get_municipality_config(municipality_slug))
@@ -51,6 +52,7 @@ def build_cached_municipality_scenario(
 @st.cache_data(show_spinner=False)
 def build_cached_municipality_report(
     municipality_slug: str,
+    data_status: str,
     roads,
     results: dict,
     dataset_version: int,
@@ -59,7 +61,7 @@ def build_cached_municipality_report(
 ) -> bytes:
     """Build the requested PDF once per data, scenario, date, and template version."""
 
-    del dataset_version, report_date, report_version  # Deliberately part of the cache key.
+    del data_status, dataset_version, report_date, report_version  # Deliberately part of the cache key.
     from components.municipality_report import build_municipality_report
 
     return build_municipality_report(
@@ -86,6 +88,7 @@ def render_municipality_pilot() -> None:
         ACTIVE_MUNICIPALITY.slug,
         str(data_path),
         dataset_version,
+        ACTIVE_MUNICIPALITY.normalized_data_status,
     )
 
     render_municipality_executive_overview(ACTIVE_MUNICIPALITY, municipality_roads)
@@ -136,11 +139,12 @@ def render_municipality_pilot() -> None:
     if st.session_state.get("municipality_report_requested", False):
         report_bytes = build_cached_municipality_report(
             ACTIVE_MUNICIPALITY.slug,
+            ACTIVE_MUNICIPALITY.normalized_data_status,
             municipality_roads,
             municipality_results,
             dataset_version,
             date.today().isoformat(),
-            "municipality-pilot-report-v1.2",
+            "municipality-pilot-report-v1.3",
         )
         from components.municipality_report import render_municipality_report
 
@@ -341,6 +345,7 @@ else:
             ACTIVE_MUNICIPALITY.slug,
             str(data_path),
             data_path.stat().st_mtime_ns,
+            ACTIVE_MUNICIPALITY.normalized_data_status,
         )
 
     roads = load_roads()

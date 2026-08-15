@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import Any
 
 
-CURRENT_MANIFEST_VERSION = 1
+CURRENT_MANIFEST_VERSION = 2
 MANIFEST_VERSION_FIELD = "manifest_version"
 
 
@@ -60,7 +60,18 @@ MANIFEST_V1_FIELDS = MappingProxyType(
     }
 )
 
-MANIFEST_CONTRACTS = MappingProxyType({1: MANIFEST_V1_FIELDS})
+MANIFEST_V2_FIELDS = MappingProxyType(
+    {
+        **MANIFEST_V1_FIELDS,
+        MANIFEST_VERSION_FIELD: ManifestFieldDefinition((int,), "integer 2"),
+        "data_status": _text_field(),
+    }
+)
+
+MANIFEST_CONTRACTS = MappingProxyType({
+    1: MANIFEST_V1_FIELDS,
+    2: MANIFEST_V2_FIELDS,
+})
 
 
 def get_manifest_contract(

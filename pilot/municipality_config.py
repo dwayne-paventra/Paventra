@@ -7,6 +7,12 @@ import math
 from pathlib import Path
 from typing import Mapping, Any
 
+from pilot.data_provenance import (
+    DEFAULT_DATA_STATUS,
+    get_data_provenance,
+    normalize_data_status,
+)
+
 
 SUPPORTED_ENTITY_TYPES = frozenset({
     "agency",
@@ -39,6 +45,7 @@ class MunicipalityConfig:
     leadership_label: str
     official_action_label: str
     scenario_catalog_id: str
+    data_status: str = DEFAULT_DATA_STATUS
     source_column_mapping: Mapping[str, str] | None = None
     canonical_defaults: Mapping[str, Any] | None = None
 
@@ -60,7 +67,21 @@ class MunicipalityConfig:
 
     @property
     def pilot_disclaimer(self) -> str:
-        return f"Demonstration Environment — Not an official {self.formal_name} analysis."
+        """Compatibility name for the centralized status-aware analysis notice."""
+
+        return self.data_provenance.notice(self.formal_name)
+
+    @property
+    def normalized_data_status(self) -> str:
+        """Return the stable identifier for this configuration's declared status."""
+
+        return normalize_data_status(self.data_status)
+
+    @property
+    def data_provenance(self):
+        """Return centralized labels and safeguards for the configured status."""
+
+        return get_data_provenance(self.data_status)
 
 
 def validate_municipality_config(config: MunicipalityConfig) -> None:
@@ -87,6 +108,7 @@ def validate_municipality_config(config: MunicipalityConfig) -> None:
         "pilot_mode",
         "inventory_adapter",
         "scenario_catalog_id",
+        "data_status",
     )
     for field_name in required_text_fields:
         value = getattr(config, field_name)
@@ -94,6 +116,11 @@ def validate_municipality_config(config: MunicipalityConfig) -> None:
             raise ValueError(
                 f"Municipality '{identity}' field '{field_name}' must be a non-empty string."
             )
+
+    try:
+        normalize_data_status(config.data_status)
+    except ValueError as exc:
+        raise ValueError(f"Municipality '{identity}' {exc}") from exc
 
     if config.entity_type.strip().lower() not in SUPPORTED_ENTITY_TYPES:
         supported = ", ".join(sorted(SUPPORTED_ENTITY_TYPES))

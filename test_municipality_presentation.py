@@ -199,6 +199,7 @@ app.run()
 assert not app.exception, [str(item.value) for item in app.exception]
 assert os.environ['EXPECTED_TITLE'] in [item.value for item in app.title]
 assert any(os.environ['EXPECTED_FORMAL'] in item.value for item in app.markdown)
+assert any('Illustrative demonstration analysis' in item.value for item in app.caption)
 
 next(button for button in app.button if button.label == 'Open investment briefing').click().run()
 assert not app.exception, [str(item.value) for item in app.exception]

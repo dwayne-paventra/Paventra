@@ -1,11 +1,12 @@
 {
-  "manifest_version": 1,
+  "manifest_version": 2,
   "municipality_id": "example-agency-state",
   "slug": "example_agency",
   "state": "Example State",
   "entity_type": "municipality",
   "formal_name": "Example Public Works Agency",
   "short_name": "Example Agency",
+  "data_status": "provisional",
   "source_csv_path": "source_roads.csv",
   "column_mapping": {
     "Asset_ID": "road_id",
@@ -31,7 +32,6 @@
   "canonical_defaults": {
     "jurisdiction": "Example Public Works Agency",
     "surface_type": "Asphalt",
-    "data_status": "Illustrative demonstration data",
     "data_source": "Operator-provided example inventory"
   },
   "map_center": [42.0, -84.0],

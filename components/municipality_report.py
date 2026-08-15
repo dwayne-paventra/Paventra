@@ -12,6 +12,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from pilot.municipality_config import MunicipalityConfig
+from pilot.data_provenance import resolve_inventory_data_status
 
 
 def municipality_report_title(config: MunicipalityConfig) -> str:
@@ -57,24 +58,30 @@ def build_municipality_report(
         spaceBefore=12,
     )
     body = styles["BodyText"]
+    resolve_inventory_data_status(
+        roads,
+        expected_status=config.normalized_data_status,
+        municipality_slug=config.slug,
+    )
+    provenance = config.data_provenance
     data_version = (
         str(roads["data_updated_at"].max())
         if "data_updated_at" in roads.columns
-        else "Illustrative demo dataset"
+        else "Unspecified dataset version"
     )
     story = [Paragraph(f"Paventra | {config.pilot_name}", heading)]
     story.append(Paragraph(municipality_report_title(config), title))
     story.append(Paragraph(
-        f"Illustrative executive briefing | Report date {date.today().isoformat()} | "
+        f"{provenance.analysis_label} | Report date {date.today().isoformat()} | "
         f"Data version {data_version} | Paventra Pilot v1.1",
         body,
     ))
     story.append(Spacer(1, 12))
     story.append(Paragraph("Executive summary", heading))
     story.append(Paragraph(
-        f"The <b>{results['scenario_name']}</b> scenario considers an illustrative budget of "
+        f"The <b>{results['scenario_name']}</b> scenario considers a planning budget of "
         f"<b>${results['scenario']['budget']:,.0f}</b>. It recommends {len(results['roads'])} projects, "
-        f"representing ${results['spent']:,.0f} in investment and an illustrative "
+        f"representing ${results['spent']:,.0f} in investment and an estimated "
         f"{results['risk_reduction_percent']:.0f}% reduction in portfolio risk.",
         body,
     ))
@@ -134,8 +141,8 @@ def build_municipality_report(
     ))
     story.append(Spacer(1, 10))
     story.append(Paragraph(
-        f"<b>{config.pilot_disclaimer}</b> Roadway records, PCI values, costs, and map locations "
-        "are synthetic or illustrative demonstration inputs. This report is a planning discussion aid, "
+        f"<b>{config.pilot_disclaimer}</b> {provenance.inventory_statement} "
+        "This report is a planning discussion aid, "
         f"not an engineering determination or an {config.official_action_label}.",
         body,
     ))

@@ -42,6 +42,7 @@ class MunicipalityConfigTests(unittest.TestCase):
         self.assertEqual(active.leadership_label, "municipal leadership")
         self.assertEqual(active.scenario_catalog_id, "standard")
         self.assertEqual(active.pilot_name, "Jackson Municipal Pilot")
+        self.assertEqual(active.normalized_data_status, "illustrative")
         self.assertTrue(active.data_path.is_file())
 
         self.assertEqual(PILOT_NAME, active.pilot_name)
@@ -126,6 +127,7 @@ class MunicipalityConfigTests(unittest.TestCase):
                 self.assertTrue(roads["County"].eq(roads["Agency"]).all())
                 self.assertTrue(roads["Road ID"].str.strip().ne("").all())
                 self.assertTrue(roads["Risk Score"].between(0, 100).all())
+                self.assertTrue(roads["data_status"].eq("illustrative").all())
 
     def test_unknown_municipality_has_clear_error(self):
         with patch.dict(

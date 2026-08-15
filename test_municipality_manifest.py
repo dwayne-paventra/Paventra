@@ -56,7 +56,9 @@ class MunicipalityManifestTests(unittest.TestCase):
     def test_pine_ridge_manifest_constructs_existing_config_model(self):
         config = load_onboarding_manifest(ONBOARDING_DEMO_MANIFEST_PATH)
 
-        self.assertEqual(self.manifest["manifest_version"], CURRENT_MANIFEST_VERSION)
+        self.assertEqual(self.manifest["manifest_version"], 1)
+        self.assertGreater(CURRENT_MANIFEST_VERSION, 1)
+        self.assertEqual(config.normalized_data_status, "illustrative")
         self.assertEqual(config, ONBOARDING_DEMO_MUNICIPALITY)
         self.assertEqual(config.data_path, SOURCE_PATH)
         self.assertEqual(
@@ -98,6 +100,7 @@ class MunicipalityManifestTests(unittest.TestCase):
             parse_onboarding_manifest(invalid, ONBOARDING_DEMO_MANIFEST_PATH)
 
     def test_contract_helpers_match_parser_fields(self):
+        template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
         contract = get_manifest_contract(CURRENT_MANIFEST_VERSION)
 
         self.assertEqual(
@@ -109,12 +112,12 @@ class MunicipalityManifestTests(unittest.TestCase):
             MANIFEST_OPTIONAL_FIELDS,
         )
         self.assertEqual(MANIFEST_OPTIONAL_FIELDS, ())
-        self.assertEqual(set(contract), set(self.manifest))
+        self.assertEqual(set(contract), set(template))
         for field, definition in contract.items():
             with self.subTest(field=field):
                 self.assertTrue(definition.required)
                 self.assertIsInstance(
-                    self.manifest[field],
+                    template[field],
                     definition.accepted_types,
                 )
 
@@ -123,10 +126,11 @@ class MunicipalityManifestTests(unittest.TestCase):
         config = load_onboarding_manifest(TEMPLATE_PATH)
         supplied_canonical_fields = set(template["column_mapping"].values()) | set(
             template["canonical_defaults"]
-        )
+        ) | {"data_status"}
 
         self.assertEqual(template["manifest_version"], CURRENT_MANIFEST_VERSION)
         self.assertEqual(config.slug, "example_agency")
+        self.assertEqual(config.normalized_data_status, "provisional")
         self.assertEqual(supplied_canonical_fields, set(CANONICAL_COLUMNS))
 
     def test_canonical_documentation_tracks_every_implemented_field(self):
@@ -251,6 +255,7 @@ class MunicipalityManifestTests(unittest.TestCase):
         self.assertIn("Source rows: 5", stdout.getvalue())
         self.assertIn("Inventory adapter: mapped_csv", stdout.getvalue())
         self.assertIn("Scenario catalog: standard", stdout.getvalue())
+        self.assertIn("Data status: Illustrative (illustrative)", stdout.getvalue())
         self.assertIn("no files written (dry run)", stdout.getvalue())
         self.assertIn("Validation result: PASS", stdout.getvalue())
 

@@ -102,7 +102,7 @@ class MunicipalityOnboardingTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             ValueError,
-            "canonical inventory validation failed: Canonical demonstration inventory",
+            "canonical inventory validation failed: Canonical inventory.*data_status.*unsupported",
         ):
             map_source_to_canonical(self.config, invalid)
 

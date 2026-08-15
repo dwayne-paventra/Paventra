@@ -7,6 +7,11 @@ from pathlib import Path
 import pandas as pd
 
 from predictor import calculate_risk_details
+from pilot.data_provenance import (
+    DEFAULT_DATA_STATUS,
+    normalize_inventory_data_status,
+    resolve_inventory_data_status,
+)
 
 
 CANONICAL_COLUMNS = (
@@ -78,8 +83,13 @@ def normalize_treatment(value: object) -> str:
     return aliases.get(normalized, str(value).strip())
 
 
-def validate_canonical_schema(roads: pd.DataFrame) -> None:
-    """Validate a canonical illustrative municipality inventory."""
+def validate_canonical_schema(
+    roads: pd.DataFrame,
+    *,
+    expected_data_status: object | None = None,
+    municipality_slug: str | None = None,
+) -> None:
+    """Validate a canonical municipality inventory and its provenance status."""
 
     missing = [column for column in CANONICAL_COLUMNS if column not in roads.columns]
     if missing:
@@ -103,10 +113,11 @@ def validate_canonical_schema(roads: pd.DataFrame) -> None:
     if not numeric_values["pci"].between(0, 100).all():
         raise ValueError("Canonical inventory pci must be between 0 and 100.")
 
-    if not roads["data_status"].eq("Illustrative demonstration data").all():
-        raise ValueError(
-            "Canonical demonstration inventory must be explicitly marked illustrative."
-        )
+    resolve_inventory_data_status(
+        roads,
+        expected_status=expected_data_status,
+        municipality_slug=municipality_slug,
+    )
 
 
 def enrich_canonical_inventory(roads: pd.DataFrame) -> pd.DataFrame:
@@ -133,11 +144,32 @@ def enrich_canonical_inventory(roads: pd.DataFrame) -> pd.DataFrame:
     return enriched
 
 
-def load_canonical_inventory(path: str | Path) -> pd.DataFrame:
+def load_canonical_inventory(
+    path: str | Path,
+    *,
+    expected_data_status: object | None = None,
+    municipality_slug: str | None = None,
+) -> pd.DataFrame:
     """Load, validate, and enrich one canonical municipality CSV."""
 
     roads = pd.read_csv(path)
-    validate_canonical_schema(roads)
+    # The compatibility default is illustrative. Provisional or official loads
+    # must state intent through configuration/caller input.
+    resolved_expected_status = (
+        DEFAULT_DATA_STATUS
+        if expected_data_status is None
+        else expected_data_status
+    )
+    validate_canonical_schema(
+        roads,
+        expected_data_status=resolved_expected_status,
+        municipality_slug=municipality_slug,
+    )
+    roads = normalize_inventory_data_status(
+        roads,
+        expected_status=resolved_expected_status,
+        municipality_slug=municipality_slug,
+    )
     return enrich_canonical_inventory(roads)
 
 
@@ -176,11 +208,17 @@ def load_streamlit_inventory(
     municipality_name: str | None = None,
     *,
     agency_name: str | None = None,
+    expected_data_status: object | None = None,
+    municipality_slug: str | None = None,
 ) -> pd.DataFrame:
     """Run the shared canonical-to-Streamlit inventory pipeline."""
 
     return to_streamlit_inventory(
-        load_canonical_inventory(path),
+        load_canonical_inventory(
+            path,
+            expected_data_status=expected_data_status,
+            municipality_slug=municipality_slug,
+        ),
         municipality_name=municipality_name,
         agency_name=agency_name,
     )

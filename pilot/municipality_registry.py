@@ -35,6 +35,7 @@ JACKSON_MUNICIPALITY = MunicipalityConfig(
     leadership_label="municipal leadership",
     official_action_label="official city finding",
     scenario_catalog_id="standard",
+    data_status="illustrative",
 )
 
 DEMO_CITY_MUNICIPALITY = MunicipalityConfig(
@@ -54,6 +55,7 @@ DEMO_CITY_MUNICIPALITY = MunicipalityConfig(
     leadership_label="municipal leadership",
     official_action_label="official city finding",
     scenario_catalog_id="standard",
+    data_status="illustrative",
 )
 
 DEMO_ROAD_COMMISSION_MUNICIPALITY = MunicipalityConfig(
@@ -73,6 +75,7 @@ DEMO_ROAD_COMMISSION_MUNICIPALITY = MunicipalityConfig(
     leadership_label="road commission leadership",
     official_action_label="official road commission determination",
     scenario_catalog_id="road_commission_demo",
+    data_status="illustrative",
 )
 
 ONBOARDING_DEMO_MANIFEST_PATH = (

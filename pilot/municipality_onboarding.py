@@ -19,6 +19,11 @@ from pilot.canonical_inventory import (
     validate_canonical_schema,
 )
 from pilot.municipality_config import MunicipalityConfig, validate_municipality_config
+from pilot.data_provenance import (
+    DEFAULT_DATA_STATUS,
+    normalize_inventory_data_status,
+    normalize_data_status,
+)
 from pilot.onboarding_manifest_contract import (
     get_optional_manifest_fields,
     get_required_manifest_fields,
@@ -38,7 +43,7 @@ def parse_onboarding_manifest(
     """Construct and validate the existing config model from one manifest."""
 
     path = Path(manifest_path).resolve()
-    validate_manifest_contract(manifest, path)
+    manifest_version = validate_manifest_contract(manifest, path)
 
     source_value = manifest["source_csv_path"]
     source_path = Path(source_value)
@@ -67,6 +72,12 @@ def parse_onboarding_manifest(
         leadership_label=manifest["leadership_label"],
         official_action_label=manifest["official_action_label"],
         scenario_catalog_id=manifest["scenario_catalog_id"],
+        # Version 1 was an illustrative-only contract. Version 2 makes intent explicit.
+        data_status=(
+            DEFAULT_DATA_STATUS
+            if manifest_version == 1
+            else normalize_data_status(manifest["data_status"])
+        ),
         source_column_mapping=manifest["column_mapping"],
         canonical_defaults=manifest["canonical_defaults"],
     )
@@ -223,6 +234,11 @@ def map_source_to_canonical(
     for canonical_column, value in defaults.items():
         canonical[canonical_column] = value
 
+    # Config/manifest intent is authoritative. A supplied row/default status is
+    # accepted only when it agrees; otherwise onboarding fails before export.
+    if "data_status" not in canonical.columns:
+        canonical["data_status"] = config.normalized_data_status
+
     missing_canonical = [
         column for column in CANONICAL_COLUMNS if column not in canonical.columns
     ]
@@ -278,12 +294,20 @@ def map_source_to_canonical(
             )
 
     try:
-        validate_canonical_schema(canonical)
+        validate_canonical_schema(
+            canonical,
+            expected_data_status=config.normalized_data_status,
+            municipality_slug=config.slug,
+        )
     except ValueError as exc:
         raise ValueError(
             f"Municipality '{config.slug}' canonical inventory validation failed: {exc}"
         ) from exc
-    return canonical
+    return normalize_inventory_data_status(
+        canonical,
+        expected_status=config.normalized_data_status,
+        municipality_slug=config.slug,
+    )
 
 
 def load_onboarded_canonical_inventory(
@@ -346,12 +370,30 @@ def export_canonical_inventory(
     output_path: str | Path,
     *,
     force: bool = False,
+    expected_data_status: object | None = None,
+    municipality_slug: str | None = None,
 ) -> Path:
     """Write validated canonical columns in deterministic order."""
 
     output = Path(output_path).resolve()
     canonical = inventory.loc[:, CANONICAL_COLUMNS].copy()
-    validate_canonical_schema(canonical)
+    # The compatibility default is illustrative. Higher-trust exports require
+    # an explicit expected status from configuration or the caller.
+    resolved_expected_status = (
+        DEFAULT_DATA_STATUS
+        if expected_data_status is None
+        else expected_data_status
+    )
+    validate_canonical_schema(
+        canonical,
+        expected_data_status=resolved_expected_status,
+        municipality_slug=municipality_slug,
+    )
+    canonical = normalize_inventory_data_status(
+        canonical,
+        expected_status=resolved_expected_status,
+        municipality_slug=municipality_slug,
+    )
 
     if output.exists() and not force:
         raise ValueError(
@@ -395,6 +437,10 @@ def _print_onboarding_summary(
     print(f"Defaults used ({len(defaults)}): {default_fields}")
     print(f"Inventory adapter: {config.inventory_adapter}")
     print(f"Scenario catalog: {config.scenario_catalog_id}")
+    print(
+        f"Data status: {config.data_provenance.label} "
+        f"({config.normalized_data_status})"
+    )
     if output_path is None:
         print("Output: no files written (dry run)")
     else:
@@ -476,6 +522,8 @@ def main(argv: list[str] | None = None) -> int:
                 inventory,
                 args.output,
                 force=args.force,
+                expected_data_status=config.normalized_data_status,
+                municipality_slug=config.slug,
             )
         _print_onboarding_summary(
             config,

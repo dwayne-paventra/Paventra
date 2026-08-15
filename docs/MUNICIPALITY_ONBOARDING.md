@@ -1,6 +1,6 @@
 # Municipality onboarding runbook
 
-This runbook is for the person preparing a new Paventra demonstration municipality. It assumes PowerShell is open at the `Paventra-Jackson-Clean` repository root.
+This runbook is for the person preparing a new Paventra municipality inventory. It assumes PowerShell is open at the `Paventra-Jackson-Clean` repository root.
 
 The onboarding tools validate and transform data. They do not register a municipality automatically, modify the dashboard, or change the source file.
 
@@ -33,7 +33,15 @@ Never edit `source_roads.raw.csv`. If corrections are necessary, make them in `s
 Copy-Item docs\manifest.template.json data\example_township\manifest.json
 ```
 
-Open the new manifest and replace every example identity and label. Keep `manifest_version` set to `1`. Version is required; missing or unsupported versions fail before any deeper processing.
+Open the new manifest and replace every example identity and label. Keep `manifest_version` set to `2`. Version is required; missing or unsupported versions fail before any deeper processing. Version 1 remains readable only for existing illustrative manifests.
+
+Set top-level `data_status` deliberately:
+
+- `illustrative` for synthetic or demonstration data;
+- `provisional` for real or supplied data that has not been designated official;
+- `official` only when the manifest author explicitly intends the inventory to be represented as official.
+
+Paventra does not infer official status from filenames, source labels, or data quality. Do not use `official` to imply an approval, signature, or certification workflow that occurred elsewhere. See [DATA_PROVENANCE.md](DATA_PROVENANCE.md) for the full status contract.
 
 For the current mapped CSV workflow, keep:
 
@@ -63,7 +71,7 @@ Use `canonical_defaults` for a value that truly applies to every row:
 "surface_type": "Asphalt"
 ```
 
-A canonical field cannot be both a mapping target and a default. Neither wins; the overlap is an error. Review all required fields and their current behavior in [CANONICAL_INVENTORY.md](CANONICAL_INVENTORY.md).
+A canonical field cannot be both a mapping target and a default. Neither wins; the overlap is an error. `data_status` normally belongs only at the manifest top level; if a legacy/source row status is also mapped, it must agree on every row. Review all required fields and their current behavior in [CANONICAL_INVENTORY.md](CANONICAL_INVENTORY.md).
 
 ## 4. Run a dry run
 
@@ -71,7 +79,7 @@ A canonical field cannot be both a mapping target and a default. Neither wins; t
 python -m pilot.municipality_onboarding --manifest data\example_township\manifest.json --dry-run
 ```
 
-Success prints the municipality, manifest version, source path, row counts, mappings, defaults, adapter, catalog, and `Validation result: PASS`. It writes no files and returns exit code 0:
+Success prints the municipality, manifest version, resolved data status, source path, row counts, mappings, defaults, adapter, catalog, and `Validation result: PASS`. It writes no files and returns exit code 0:
 
 ```powershell
 $LASTEXITCODE
@@ -83,9 +91,10 @@ Validation failures return exit code 1. Command-usage errors return 2.
 
 | Message topic | What to check |
 | --- | --- |
-| Missing or unsupported `manifest_version` | Add numeric version `1`. Do not guess or reuse an unsupported version. |
+| Missing or unsupported `manifest_version` | New manifests use numeric version `2`. Do not guess or reuse an unsupported version. |
 | Missing manifest field | Compare the manifest with `docs\manifest.template.json`. |
-| Unknown manifest field | Correct the spelling or remove the field; version 1 rejects undeclared fields. |
+| Unknown manifest field | Correct the spelling or remove the field; each manifest version rejects undeclared fields. |
+| Invalid or contradictory `data_status` | Use `illustrative`, `provisional`, or `official`; ensure any mapped row status agrees with top-level intent. |
 | Unknown adapter or catalog | Use an ID already registered in Paventra. Normal mapped onboarding uses `mapped_csv` and `standard`. |
 | Missing mapped source column | Match the left side of `column_mapping` exactly to the CSV header. |
 | Missing canonical field | Add a source mapping or a canonical default for the named field. |

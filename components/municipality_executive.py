@@ -21,9 +21,10 @@ def render_municipality_executive_overview(
     ) if not roads.empty else 0.0
     demonstration_need = float(roads["Estimated Cost"].sum()) if not roads.empty else 0.0
     annual_investment = float(results["scenario"]["budget"]) if results else 3_000_000.0
+    provenance = config.data_provenance
 
     st.title(config.pilot_name)
-    st.caption("A decision briefing for pavement investment planning")
+    st.caption(f"{provenance.analysis_label} | A decision briefing for pavement investment planning")
     st.markdown(
         f'<div class="pilot-notice">{config.pilot_disclaimer}</div>',
         unsafe_allow_html=True,
@@ -42,7 +43,7 @@ def render_municipality_executive_overview(
         ("Network Health", f"{max(0, 100 - roads['Risk Score'].mean()):.0f}/100"),
         ("Average PCI", f"{average_pci:.0f}"),
         ("High-Risk Segments", f"{high_risk}"),
-        ("Demo Investment Need", f"${demonstration_need:,.0f}"),
+        ("Estimated Investment Need", f"${demonstration_need:,.0f}"),
         ("Treatable Lane Miles", f"{results['selected_lane_miles']:.1f}" if results else "Select scenario"),
     ]
     for column, (label, value) in zip(st.columns(3), values[:3]):
