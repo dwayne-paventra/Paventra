@@ -10,10 +10,19 @@ import pandas as pd
 
 from pilot.canonical_inventory import CANONICAL_COLUMNS, validate_canonical_schema
 from pilot.municipality_onboarding import (
+    MANIFEST_OPTIONAL_FIELDS,
+    MANIFEST_REQUIRED_FIELDS,
+    build_cli_parser,
     load_onboarding_manifest,
     main,
     parse_onboarding_manifest,
     prepare_manifest_inventory,
+)
+from pilot.onboarding_manifest_contract import (
+    CURRENT_MANIFEST_VERSION,
+    get_manifest_contract,
+    get_optional_manifest_fields,
+    get_required_manifest_fields,
 )
 from pilot.municipality_registry import (
     MUNICIPALITIES,
@@ -26,6 +35,8 @@ from pilot.municipality_registry import (
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 SOURCE_PATH = PROJECT_ROOT / "data" / "onboarding_demo" / "source_roads.csv"
+TEMPLATE_PATH = PROJECT_ROOT / "docs" / "manifest.template.json"
+CANONICAL_DOC_PATH = PROJECT_ROOT / "docs" / "CANONICAL_INVENTORY.md"
 
 
 class MunicipalityManifestTests(unittest.TestCase):
@@ -45,6 +56,7 @@ class MunicipalityManifestTests(unittest.TestCase):
     def test_pine_ridge_manifest_constructs_existing_config_model(self):
         config = load_onboarding_manifest(ONBOARDING_DEMO_MANIFEST_PATH)
 
+        self.assertEqual(self.manifest["manifest_version"], CURRENT_MANIFEST_VERSION)
         self.assertEqual(config, ONBOARDING_DEMO_MUNICIPALITY)
         self.assertEqual(config.data_path, SOURCE_PATH)
         self.assertEqual(
@@ -54,6 +66,94 @@ class MunicipalityManifestTests(unittest.TestCase):
         self.assertEqual(config.canonical_defaults, {})
         self.assertIs(MUNICIPALITIES[config.slug], ONBOARDING_DEMO_MUNICIPALITY)
         validate_municipality_registry()
+
+    def test_manifest_version_is_required_and_checked_first(self):
+        invalid = deepcopy(self.manifest)
+        del invalid["manifest_version"]
+        del invalid["formal_name"]
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"manifest\.json'.*missing required field 'manifest_version'",
+        ):
+            parse_onboarding_manifest(invalid, ONBOARDING_DEMO_MANIFEST_PATH)
+
+    def test_unsupported_manifest_version_identifies_path_and_value(self):
+        invalid = {"manifest_version": 99}
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"manifest\.json'.*unsupported 'manifest_version' value '99'",
+        ):
+            parse_onboarding_manifest(invalid, ONBOARDING_DEMO_MANIFEST_PATH)
+
+    def test_manifest_version_must_be_an_integer(self):
+        invalid = deepcopy(self.manifest)
+        invalid["manifest_version"] = "1"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            r"field 'manifest_version' must be an integer.*'1'",
+        ):
+            parse_onboarding_manifest(invalid, ONBOARDING_DEMO_MANIFEST_PATH)
+
+    def test_contract_helpers_match_parser_fields(self):
+        contract = get_manifest_contract(CURRENT_MANIFEST_VERSION)
+
+        self.assertEqual(
+            get_required_manifest_fields(),
+            MANIFEST_REQUIRED_FIELDS,
+        )
+        self.assertEqual(
+            get_optional_manifest_fields(),
+            MANIFEST_OPTIONAL_FIELDS,
+        )
+        self.assertEqual(MANIFEST_OPTIONAL_FIELDS, ())
+        self.assertEqual(set(contract), set(self.manifest))
+        for field, definition in contract.items():
+            with self.subTest(field=field):
+                self.assertTrue(definition.required)
+                self.assertIsInstance(
+                    self.manifest[field],
+                    definition.accepted_types,
+                )
+
+    def test_operator_template_is_contract_valid_and_complete(self):
+        template = json.loads(TEMPLATE_PATH.read_text(encoding="utf-8"))
+        config = load_onboarding_manifest(TEMPLATE_PATH)
+        supplied_canonical_fields = set(template["column_mapping"].values()) | set(
+            template["canonical_defaults"]
+        )
+
+        self.assertEqual(template["manifest_version"], CURRENT_MANIFEST_VERSION)
+        self.assertEqual(config.slug, "example_agency")
+        self.assertEqual(supplied_canonical_fields, set(CANONICAL_COLUMNS))
+
+    def test_canonical_documentation_tracks_every_implemented_field(self):
+        documentation = CANONICAL_DOC_PATH.read_text(encoding="utf-8")
+
+        for field in CANONICAL_COLUMNS:
+            with self.subTest(canonical_field=field):
+                self.assertIn(f"| `{field}` |", documentation)
+
+    def test_cli_help_is_operator_friendly_and_exits_successfully(self):
+        stdout = io.StringIO()
+        with redirect_stdout(stdout), self.assertRaises(SystemExit) as exit_context:
+            build_cli_parser().parse_args(["--help"])
+
+        help_text = stdout.getvalue()
+        self.assertEqual(exit_context.exception.code, 0)
+        for expected in (
+            "--manifest PATH",
+            "--dry-run",
+            "--output PATH",
+            "--force",
+            "without writing files",
+            "exit code 0",
+            "return exit code 1",
+        ):
+            with self.subTest(help_text=expected):
+                self.assertIn(expected, help_text)
 
     def test_manifest_requires_every_declarative_field(self):
         invalid = deepcopy(self.manifest)
@@ -147,6 +247,7 @@ class MunicipalityManifestTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(before, set(ONBOARDING_DEMO_MANIFEST_PATH.parent.iterdir()))
         self.assertIn("Municipality: Pine Ridge Township (onboarding_demo)", stdout.getvalue())
+        self.assertIn("Manifest version: 1", stdout.getvalue())
         self.assertIn("Source rows: 5", stdout.getvalue())
         self.assertIn("Inventory adapter: mapped_csv", stdout.getvalue())
         self.assertIn("Scenario catalog: standard", stdout.getvalue())

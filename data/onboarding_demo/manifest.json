@@ -1,4 +1,5 @@
 {
+  "manifest_version": 1,
   "municipality_id": "pine-ridge-township-mi",
   "slug": "onboarding_demo",
   "state": "Michigan",

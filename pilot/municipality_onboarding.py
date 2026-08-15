@@ -19,27 +19,16 @@ from pilot.canonical_inventory import (
     validate_canonical_schema,
 )
 from pilot.municipality_config import MunicipalityConfig, validate_municipality_config
-
-
-MANIFEST_REQUIRED_FIELDS = (
-    "municipality_id",
-    "slug",
-    "state",
-    "entity_type",
-    "formal_name",
-    "short_name",
-    "source_csv_path",
-    "column_mapping",
-    "canonical_defaults",
-    "map_center",
-    "map_zoom",
-    "inventory_adapter",
-    "scenario_catalog_id",
-    "pilot_mode",
-    "pilot_label",
-    "leadership_label",
-    "official_action_label",
+from pilot.onboarding_manifest_contract import (
+    get_optional_manifest_fields,
+    get_required_manifest_fields,
+    validate_manifest_contract,
 )
+
+
+# Phase 8 compatibility aliases, now derived from the versioned contract.
+MANIFEST_REQUIRED_FIELDS = get_required_manifest_fields()
+MANIFEST_OPTIONAL_FIELDS = get_optional_manifest_fields()
 
 
 def parse_onboarding_manifest(
@@ -49,28 +38,9 @@ def parse_onboarding_manifest(
     """Construct and validate the existing config model from one manifest."""
 
     path = Path(manifest_path).resolve()
-    if not isinstance(manifest, Mapping):
-        raise ValueError(f"Onboarding manifest '{path}' must contain a JSON object.")
-
-    missing = [field for field in MANIFEST_REQUIRED_FIELDS if field not in manifest]
-    if missing:
-        raise ValueError(
-            f"Onboarding manifest '{path}' is missing required fields: "
-            f"{', '.join(missing)}."
-        )
-    unknown = sorted(set(manifest) - set(MANIFEST_REQUIRED_FIELDS))
-    if unknown:
-        raise ValueError(
-            f"Onboarding manifest '{path}' contains unknown fields: "
-            f"{', '.join(unknown)}."
-        )
+    validate_manifest_contract(manifest, path)
 
     source_value = manifest["source_csv_path"]
-    if not isinstance(source_value, str) or not source_value.strip():
-        raise ValueError(
-            f"Onboarding manifest '{path}' field 'source_csv_path' must be a "
-            "non-empty string."
-        )
     source_path = Path(source_value)
     if not source_path.is_absolute():
         source_path = path.parent / source_path
@@ -107,6 +77,15 @@ def parse_onboarding_manifest(
 def load_onboarding_manifest(manifest_path: str | Path) -> MunicipalityConfig:
     """Read a JSON onboarding manifest and return a validated config."""
 
+    path, manifest = _read_onboarding_manifest_document(manifest_path)
+    return parse_onboarding_manifest(manifest, path)
+
+
+def _read_onboarding_manifest_document(
+    manifest_path: str | Path,
+) -> tuple[Path, Mapping[str, Any]]:
+    """Read one JSON document while preserving manifest-specific errors."""
+
     path = Path(manifest_path).resolve()
     try:
         with path.open(encoding="utf-8") as manifest_file:
@@ -120,7 +99,7 @@ def load_onboarding_manifest(manifest_path: str | Path) -> MunicipalityConfig:
         ) from exc
     except OSError as exc:
         raise ValueError(f"Onboarding manifest '{path}' could not be read: {exc}") from exc
-    return parse_onboarding_manifest(manifest, path)
+    return path, manifest
 
 
 def _source_csv_rows(mask: pd.Series) -> list[int]:
@@ -347,9 +326,19 @@ def prepare_manifest_inventory(
 ) -> tuple[MunicipalityConfig, pd.DataFrame]:
     """Run a manifest source through the existing validated onboarding pipeline."""
 
-    config = load_onboarding_manifest(manifest_path)
-    inventory = load_onboarded_canonical_inventory(config)
+    _, config, inventory = _prepare_manifest_inventory_details(manifest_path)
     return config, inventory
+
+
+def _prepare_manifest_inventory_details(
+    manifest_path: str | Path,
+) -> tuple[int, MunicipalityConfig, pd.DataFrame]:
+    """Prepare CLI details without adding manifest fields to the config model."""
+
+    path, manifest = _read_onboarding_manifest_document(manifest_path)
+    config = parse_onboarding_manifest(manifest, path)
+    inventory = load_onboarded_canonical_inventory(config)
+    return manifest["manifest_version"], config, inventory
 
 
 def export_canonical_inventory(
@@ -384,6 +373,7 @@ def export_canonical_inventory(
 
 def _print_onboarding_summary(
     config: MunicipalityConfig,
+    manifest_version: int,
     manifest_path: Path,
     inventory: pd.DataFrame,
     output_path: Path | None,
@@ -396,6 +386,7 @@ def _print_onboarding_summary(
     default_fields = ", ".join(defaults) if defaults else "none"
 
     print(f"Municipality: {config.formal_name} ({config.slug})")
+    print(f"Manifest version: {manifest_version}")
     print(f"Manifest: {manifest_path}")
     print(f"Source CSV: {config.data_path}")
     print(f"Source rows: {len(inventory)}")
@@ -415,24 +406,53 @@ def build_cli_parser() -> argparse.ArgumentParser:
     """Build the onboarding command-line interface."""
 
     parser = argparse.ArgumentParser(
-        description="Validate and optionally export a municipality onboarding manifest."
+        description=(
+            "Validate a versioned municipality onboarding manifest and its source "
+            "road inventory. Validation failures return a nonzero exit code."
+        ),
+        epilog=(
+            "Examples:\n"
+            "  python -m pilot.municipality_onboarding --manifest "
+            "data/example/manifest.json --dry-run\n"
+            "  python -m pilot.municipality_onboarding --manifest "
+            "data/example/manifest.json --output data/example/canonical.csv\n\n"
+            "A successful command returns exit code 0. Onboarding validation or "
+            "export failures return exit code 1; command-usage errors return 2."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--manifest", required=True, type=Path)
+    parser.add_argument(
+        "--manifest",
+        required=True,
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Path to the versioned JSON manifest. Relative source_csv_path values "
+            "are resolved from the manifest's directory."
+        ),
+    )
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument(
         "--dry-run",
         action="store_true",
-        help="Validate the manifest and source without writing files.",
+        help=(
+            "Validate the manifest, source mappings, canonical data, adapter, and "
+            "scenario catalog without writing files."
+        ),
     )
     action.add_argument(
         "--output",
         type=Path,
-        help="Write the validated canonical inventory CSV.",
+        metavar="PATH",
+        help=(
+            "After successful validation, write a canonical CSV with deterministic "
+            "field ordering. Existing files are not replaced."
+        ),
     )
     parser.add_argument(
         "--force",
         action="store_true",
-        help="Allow --output to replace an existing file.",
+        help="Allow --output to replace an existing file; invalid without --output.",
     )
     return parser
 
@@ -447,7 +467,9 @@ def main(argv: list[str] | None = None) -> int:
 
     manifest_path = args.manifest.resolve()
     try:
-        config, inventory = prepare_manifest_inventory(manifest_path)
+        manifest_version, config, inventory = _prepare_manifest_inventory_details(
+            manifest_path
+        )
         output_path = None
         if args.output is not None:
             output_path = export_canonical_inventory(
@@ -455,7 +477,13 @@ def main(argv: list[str] | None = None) -> int:
                 args.output,
                 force=args.force,
             )
-        _print_onboarding_summary(config, manifest_path, inventory, output_path)
+        _print_onboarding_summary(
+            config,
+            manifest_version,
+            manifest_path,
+            inventory,
+            output_path,
+        )
     except (TypeError, ValueError) as exc:
         print(f"Onboarding failed: {exc}", file=sys.stderr)
         return 1
