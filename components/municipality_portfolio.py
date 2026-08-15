@@ -133,6 +133,17 @@ def _details(entry) -> None:
             except (OSError, UnicodeError, json.JSONDecodeError) as exc:
                 st.error(f"Manifest could not be displayed: {exc}")
 
+    if entry.package_type == "illustrative_demo":
+        with st.expander("Pre-meeting demo readiness checklist"):
+            st.markdown(
+                "- [ ] Municipality name and terminology are correct\n"
+                "- [ ] Illustrative status is clearly visible\n"
+                "- [ ] Map center and generated road markers look acceptable\n"
+                "- [ ] Every scenario, recommendations, and PDF report load\n"
+                "- [ ] No unrelated municipality wording is visible\n"
+                "- [ ] Portfolio can reopen this demo"
+            )
+
     if not entry.permanent and not entry.archived and entry.package_type == "illustrative_demo":
         _clone_form(entry)
         st.warning(
@@ -169,6 +180,10 @@ def render_municipality_portfolio() -> None:
     st.caption(
         "Permanent registry entries and generated working packages. Archived demos are hidden "
         "by default; portfolio listing does not load or enrich every road inventory."
+    )
+    st.caption(
+        "Generated packages persist on disk across Streamlit restarts. Dashboard selection is "
+        "session-specific, so reopen a generated demo here after a restart."
     )
     include_archived = st.checkbox("Include archived generated demos", key="portfolio_archived")
     entries = build_municipality_portfolio(include_archived=include_archived)

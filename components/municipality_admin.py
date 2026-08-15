@@ -69,13 +69,27 @@ def _identity_fields(prefix: str, *, default_label: str = "Municipal Pilot") -> 
             key=f"{prefix}_official_action",
         )
         pilot_label = st.text_input(
-            "Pilot label", value=default_label, key=f"{prefix}_pilot_label"
+            "Pilot label",
+            value=default_label,
+            help=(
+                "Use a generic label such as 'Municipal Pilot' or 'Demonstration'. "
+                "If the label already includes the municipality name, Paventra will not repeat it."
+            ),
+            key=f"{prefix}_pilot_label",
         )
         latitude = st.number_input(
-            "Map center latitude", value=42.25, format="%.6f", key=f"{prefix}_latitude"
+            "Map center latitude",
+            value=42.25,
+            format="%.6f",
+            help="Enter a locally verified decimal latitude; online address lookup is not available.",
+            key=f"{prefix}_latitude",
         )
         longitude = st.number_input(
-            "Map center longitude", value=-84.40, format="%.6f", key=f"{prefix}_longitude"
+            "Map center longitude",
+            value=-84.40,
+            format="%.6f",
+            help="Enter a locally verified decimal longitude; online address lookup is not available.",
+            key=f"{prefix}_longitude",
         )
         map_zoom = st.number_input(
             "Map zoom", min_value=0, max_value=22, value=12, step=1, key=f"{prefix}_zoom"

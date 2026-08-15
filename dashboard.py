@@ -96,7 +96,13 @@ def render_municipality_pilot() -> None:
     render_sidebar(
         pilot_mode=True,
         pilot_notice=DASHBOARD_MUNICIPALITY.pilot_disclaimer,
+        pilot_title=DASHBOARD_MUNICIPALITY.pilot_name,
     )
+    if st.sidebar.button(
+        "Return to Municipality Portfolio",
+        key="municipality_return_to_portfolio",
+    ):
+        st.switch_page("pages/1_Municipality_Onboarding.py")
 
     data_path = DASHBOARD_MUNICIPALITY.data_path
     dataset_version = data_path.stat().st_mtime_ns

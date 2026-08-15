@@ -3,7 +3,7 @@ import streamlit as st
 from streamlit_option_menu import option_menu
 
 
-def render_sidebar(pilot_mode=False, pilot_notice=None):
+def render_sidebar(pilot_mode=False, pilot_notice=None, pilot_title=None):
 
     with st.sidebar:
 
@@ -16,6 +16,9 @@ def render_sidebar(pilot_mode=False, pilot_notice=None):
 
         st.markdown("## Paventra")
         st.caption("AI-Powered Road Intelligence")
+
+        if pilot_mode and pilot_title:
+            st.markdown(f"**{pilot_title}**")
 
         selected = option_menu(
             menu_title=None,

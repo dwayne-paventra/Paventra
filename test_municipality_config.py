@@ -1,3 +1,4 @@
+from dataclasses import replace
 import os
 import unittest
 from unittest.mock import patch
@@ -12,6 +13,7 @@ from pilot.jackson_config import (
     is_jackson_pilot_mode,
 )
 from pilot.municipality_data import load_municipality_inventory
+from pilot.municipality_config import compose_municipality_presentation_title
 from pilot.municipality_registry import (
     DEFAULT_MUNICIPALITY_SLUG,
     DEMO_CITY_MUNICIPALITY,
@@ -25,6 +27,53 @@ from pilot.municipality_registry import (
 
 
 class MunicipalityConfigTests(unittest.TestCase):
+    def test_presentation_title_avoids_duplicate_identity(self):
+        napoleon = replace(
+            JACKSON_MUNICIPALITY,
+            formal_name="Napoleon Township",
+            short_name="Napoleon Township",
+            pilot_label="Napoleon Township Demonstration",
+        )
+        self.assertEqual(napoleon.pilot_name, "Napoleon Township Demonstration")
+        self.assertEqual(
+            compose_municipality_presentation_title(
+                "Napoleon Township", "Township Demonstration", "Napoleon Township"
+            ),
+            "Napoleon Township Demonstration",
+        )
+
+    def test_presentation_title_keeps_generic_labels_for_supported_entities(self):
+        cases = {
+            "township": "Cedar Township Municipal Pilot",
+            "city": "Lakeview Municipal Pilot",
+            "village": "Northfield Municipal Pilot",
+            "road commission": "West County Municipal Pilot",
+            "agency": "Regional Streets Municipal Pilot",
+            "county": "Long County Transportation Infrastructure Authority Municipal Pilot",
+        }
+        for entity_type, expected in cases.items():
+            with self.subTest(entity_type=entity_type):
+                short_name = expected.removesuffix(" Municipal Pilot")
+                config = replace(
+                    JACKSON_MUNICIPALITY,
+                    entity_type=entity_type,
+                    formal_name=short_name,
+                    short_name=short_name,
+                    pilot_label="Municipal Pilot",
+                )
+                self.assertEqual(config.pilot_name, expected)
+
+    def test_formal_name_inside_label_is_not_repeated(self):
+        config = replace(
+            JACKSON_MUNICIPALITY,
+            formal_name="Charter Township of a Deliberately Long Municipal Name",
+            short_name="Long Municipal Name",
+            pilot_label=(
+                "Charter Township of a Deliberately Long Municipal Name Demonstration"
+            ),
+        )
+        self.assertEqual(config.pilot_name, config.pilot_label)
+
     def test_jackson_is_the_default_active_municipality(self):
         with patch.dict(os.environ, {}, clear=True):
             active = get_active_municipality_config()

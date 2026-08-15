@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import re
 from pathlib import Path
 from typing import Mapping, Any
 
@@ -28,6 +29,38 @@ SUPPORTED_ENTITY_TYPES = frozenset({
     "township",
     "village",
 })
+
+
+def compose_municipality_presentation_title(
+    short_name: str,
+    pilot_label: str,
+    formal_name: str = "",
+) -> str:
+    """Compose an identity-aware title without repeating names or entity words."""
+
+    short_name = " ".join(short_name.split())
+    pilot_label = " ".join(pilot_label.split())
+    formal_name = " ".join(formal_name.split())
+
+    def words(value: str) -> list[str]:
+        return re.findall(r"[a-z0-9]+", value.casefold())
+
+    label_words = words(pilot_label)
+    for identity in (short_name, formal_name):
+        identity_words = words(identity)
+        if identity_words and any(
+            label_words[index:index + len(identity_words)] == identity_words
+            for index in range(len(label_words) - len(identity_words) + 1)
+        ):
+            return pilot_label
+
+    short_words = words(short_name)
+    overlap = 0
+    for size in range(1, min(len(short_words), len(label_words)) + 1):
+        if short_words[-size:] == label_words[:size]:
+            overlap = size
+    label_parts = pilot_label.split()
+    return " ".join([short_name, *label_parts[overlap:]])
 
 
 @dataclass(frozen=True)
@@ -70,7 +103,13 @@ class MunicipalityConfig:
 
     @property
     def pilot_name(self) -> str:
-        return f"{self.short_name} {self.pilot_label}"
+        """Compatibility property for the identity-aware presentation title."""
+
+        return compose_municipality_presentation_title(
+            self.short_name,
+            self.pilot_label,
+            self.formal_name,
+        )
 
     @property
     def pilot_disclaimer(self) -> str:

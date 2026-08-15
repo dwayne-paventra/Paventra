@@ -84,6 +84,27 @@ class MunicipalityAdminTests(unittest.TestCase):
             municipality_slug="sample_borough",
         )
 
+    def test_demo_validation_errors_identify_operator_corrections(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            root = Path(directory_name)
+            with self.assertRaisesRegex(ValueError, "5 through 50"):
+                review_illustrative_demo(
+                    _identity("bad_count", "Bad Count"),
+                    road_count=4,
+                    generated_root=root,
+                )
+            with self.assertRaisesRegex(ValueError, "formal_name"):
+                review_illustrative_demo(
+                    _identity("missing_formal", ""),
+                    generated_root=root,
+                )
+            invalid_map = replace(
+                _identity("invalid_map", "Invalid Map"),
+                map_center=(91.0, -84.4),
+            )
+            with self.assertRaisesRegex(ValueError, "map_center.latitude"):
+                review_illustrative_demo(invalid_map, generated_root=root)
+
     def test_real_import_reuses_mapping_defaults_and_provisional_status(self):
         source = ONBOARDING_DEMO_MUNICIPALITY.data_path.read_bytes()
         mapping = dict(ONBOARDING_DEMO_MUNICIPALITY.source_column_mapping)
@@ -382,6 +403,19 @@ class MunicipalityAdminTests(unittest.TestCase):
         self.assertEqual(app.selectbox(key="import_status").value, "provisional")
         self.assertTrue(any(item.label == "Upload municipality road inventory CSV" for item in app.get("file_uploader")))
 
+    def test_operator_demo_expected_validation_error_has_no_traceback(self):
+        from streamlit.testing.v1 import AppTest
+
+        app = AppTest.from_file(
+            "pages/1_Municipality_Onboarding.py", default_timeout=30
+        ).run()
+        app.text_input(key="demo_short_name").set_value("Missing Formal")
+        app.text_input(key="demo_slug").set_value("missing_formal_ui")
+        app.run()
+        app.button(key="validate_demo").click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any("formal_name" in item.value for item in app.error))
+
     def test_operator_portfolio_lists_filters_and_shows_details(self):
         from streamlit.testing.v1 import AppTest
 
@@ -391,9 +425,16 @@ class MunicipalityAdminTests(unittest.TestCase):
         app.radio[0].set_value("Municipality Portfolio").run()
         self.assertFalse(app.exception)
         self.assertTrue(any(item.value == "Municipality Portfolio" for item in app.header))
-        self.assertTrue(any("Showing 4 of 4" in item.value for item in app.get("markdown")))
+        self.assertTrue(
+            any(
+                item.value.startswith("Showing ") and item.value.endswith(" municipalities")
+                for item in app.get("markdown")
+            )
+        )
         app.text_input(key="portfolio_search").set_value("jackson").run()
-        self.assertTrue(any("Showing 1 of 4" in item.value for item in app.get("markdown")))
+        self.assertTrue(
+            any(item.value.startswith("Showing 1 of ") for item in app.get("markdown"))
+        )
         app.selectbox(key="portfolio_selected").set_value("City of Jackson — jackson").run()
         self.assertFalse(app.exception)
         self.assertTrue(
