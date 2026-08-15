@@ -25,6 +25,17 @@ from pilot.municipality_package_lifecycle import (
     registration_packet_path,
     suggested_registry_snippet,
 )
+from pilot.municipality_registration import (
+    RegistrationState,
+    accept_registration,
+    preview_registration,
+    promote_registration,
+    rollback_registration,
+)
+from pilot.municipality_registry import (
+    BUILTIN_MUNICIPALITIES,
+    refresh_persistent_municipalities,
+)
 
 
 def _open_dashboard(config, *, runtime: bool) -> None:
@@ -113,6 +124,19 @@ def _details(entry) -> None:
         )
         st.caption("Package or data location")
         st.code(str(entry.package_path))
+        if entry.registration_version is not None:
+            st.write("Registration version:", entry.registration_version)
+            st.write("Registration date:", entry.registration_date)
+            st.write(
+                "Registration acceptance:",
+                "Accepted" if entry.registration_state == RegistrationState.ACCEPTED
+                else "Pending Acceptance",
+            )
+            st.write("Registered data location:", str(entry.registered_data_path))
+            st.caption(
+                "Acceptance confirms Paventra operational verification only; it is not "
+                "municipal, engineering, or legal approval."
+            )
         if config is not None:
             st.write("Map center:", config.map_center, "Zoom:", config.map_zoom)
             st.write("Terminology:", config.leadership_label, "·", config.official_action_label)
@@ -190,6 +214,143 @@ def _details(entry) -> None:
                     )
                 except (OSError, ValueError) as exc:
                     st.error(str(exc))
+
+                if st.button(
+                    "Registration Preview",
+                    key=f"registration_preview_{entry.slug}",
+                ):
+                    st.session_state[f"registration_preview_result_{entry.slug}"] = (
+                        preview_registration(
+                            entry.package_path,
+                            protected_slugs=BUILTIN_MUNICIPALITIES,
+                        )
+                    )
+                preview = st.session_state.get(
+                    f"registration_preview_result_{entry.slug}"
+                )
+                if preview is not None:
+                    st.subheader("Review Registration")
+                    st.dataframe(
+                        pd.DataFrame([{
+                            "Formal name": preview.formal_name,
+                            "Short name": preview.short_name,
+                            "Slug": preview.slug,
+                            "Entity": preview.entity_type,
+                            "Data status": preview.data_status,
+                            "Source owner": preview.source_owner,
+                            "Source date": preview.source_date,
+                            "Source reference": preview.source_reference,
+                            "Source checksum": preview.source_checksum,
+                            "Canonical checksum": preview.canonical_checksum,
+                            "Segments": preview.segment_count,
+                            "Map center": preview.map_center,
+                            "Map zoom": preview.map_zoom,
+                            "Scenario": preview.scenario_catalog_id,
+                            "Adapter": preview.inventory_adapter,
+                            "Leadership term": preview.leadership_label,
+                            "Action term": preview.official_action_label,
+                            "Permanent path": str(preview.intended_path),
+                            "Registration version": preview.registration_version,
+                            "Result": preview.result,
+                        }]),
+                        hide_index=True,
+                        width="stretch",
+                    )
+                    if preview.blocking_issues:
+                        for issue in preview.blocking_issues:
+                            st.error(f"{issue.field}: {issue.message}")
+                    confirmation = st.text_input(
+                        f"Type `{entry.slug}` to confirm",
+                        key=f"registration_confirm_text_{entry.slug}",
+                    )
+                    confirmed = st.checkbox(
+                        f"I confirm registration of {entry.slug}",
+                        key=f"registration_confirm_checkbox_{entry.slug}",
+                    )
+                    if st.button(
+                        "Register Municipality",
+                        key=f"register_municipality_{entry.slug}",
+                        type="primary",
+                        disabled=(
+                            preview.result != "PASS"
+                            or not confirmed
+                            or confirmation != entry.slug
+                        ),
+                    ):
+                        try:
+                            registered = promote_registration(
+                                entry.package_path,
+                                confirmation_slug=confirmation,
+                                confirmed=confirmed,
+                                protected_slugs=BUILTIN_MUNICIPALITIES,
+                            )
+                            refresh_persistent_municipalities()
+                            st.success(
+                                f"Registered {registered.config.formal_name}; operational "
+                                "acceptance remains pending."
+                            )
+                            st.session_state.pop(
+                                f"registration_preview_result_{entry.slug}", None
+                            )
+                            st.rerun()
+                        except (OSError, TypeError, ValueError) as exc:
+                            st.error(str(exc))
+
+    if entry.permanent and entry.registration_version is not None:
+        st.subheader("Persistent Registration Controls")
+        if entry.registration_state == RegistrationState.PENDING_ACCEPTANCE:
+            st.info(
+                "This registration passed automated operational verification and is pending "
+                "acceptance. Acceptance is not municipal or legal certification."
+            )
+            accept_confirmed = st.checkbox(
+                f"I confirm operational acceptance of {entry.slug}",
+                key=f"accept_registration_confirm_{entry.slug}",
+            )
+            if st.button(
+                "Accept Registration",
+                key=f"accept_registration_{entry.slug}",
+                disabled=not accept_confirmed,
+            ):
+                try:
+                    accept_registration(entry.slug)
+                    refresh_persistent_municipalities()
+                    st.success("Registration accepted operationally.")
+                    st.rerun()
+                except (OSError, TypeError, ValueError) as exc:
+                    st.error(str(exc))
+            with st.expander("Controlled rollback before acceptance"):
+                rollback_text = st.text_input(
+                    f"Type `{entry.slug}` to confirm rollback",
+                    key=f"rollback_registration_text_{entry.slug}",
+                )
+                rollback_confirmed = st.checkbox(
+                    f"I confirm rollback of pending registration {entry.slug}",
+                    key=f"rollback_registration_confirm_{entry.slug}",
+                )
+                if st.button(
+                    "Rollback Pending Registration",
+                    key=f"rollback_registration_{entry.slug}",
+                    disabled=(
+                        not rollback_confirmed or rollback_text != entry.slug
+                    ),
+                ):
+                    try:
+                        rollback_registration(
+                            entry.slug,
+                            confirmation_slug=rollback_text,
+                            protected_slugs=BUILTIN_MUNICIPALITIES,
+                        )
+                        refresh_persistent_municipalities()
+                        st.success("Pending registration rolled back; onboarding history preserved.")
+                        st.rerun()
+                    except (OSError, TypeError, ValueError) as exc:
+                        st.error(str(exc))
+        else:
+            st.warning(
+                "Accepted registrations cannot be casually rolled back. Removal is restricted "
+                "to a deliberate developer-controlled process."
+            )
 
     if entry.package_type == "illustrative_demo":
         with st.expander("Pre-meeting demo readiness checklist"):
@@ -281,6 +442,8 @@ def render_municipality_portfolio() -> None:
             "Generated": entry.generated_date or "—",
             "Permanent": entry.permanent,
             "Readiness": entry.readiness_state,
+            "Registration version": entry.registration_version or "—",
+            "Registration date": entry.registration_date or "—",
         } for entry in filtered]),
         hide_index=True,
         width="stretch",
@@ -288,7 +451,18 @@ def render_municipality_portfolio() -> None:
     if not filtered:
         st.info("No municipalities match the current portfolio filters.")
         return
-    labels = {f"{entry.formal_name} — {entry.slug}": entry for entry in filtered}
+    slug_counts = {
+        entry.slug: sum(1 for candidate in filtered if candidate.slug == entry.slug)
+        for entry in filtered
+    }
+    labels = {
+        (
+            f"{entry.formal_name} — {entry.slug}"
+            if slug_counts[entry.slug] == 1
+            else f"{entry.formal_name} — {entry.slug} — {entry.readiness_state}"
+        ): entry
+        for entry in filtered
+    }
     selected = labels.get(st.selectbox(
         "View details", ["Select a municipality"] + list(labels), key="portfolio_selected"
     ))

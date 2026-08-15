@@ -12,6 +12,10 @@ from pilot.municipality_config import (
     validate_municipality_config,
 )
 from pilot.municipality_onboarding import load_onboarding_manifest
+from pilot.municipality_registration import (
+    PERSISTENT_MUNICIPALITIES_ROOT,
+    load_persistent_municipalities,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -89,12 +93,15 @@ ONBOARDING_DEMO_COLUMN_MAPPING = dict(
     ONBOARDING_DEMO_MUNICIPALITY.source_column_mapping or {}
 )
 
-MUNICIPALITIES = {
+BUILTIN_MUNICIPALITIES = {
     JACKSON_MUNICIPALITY.slug: JACKSON_MUNICIPALITY,
     DEMO_CITY_MUNICIPALITY.slug: DEMO_CITY_MUNICIPALITY,
     DEMO_ROAD_COMMISSION_MUNICIPALITY.slug: DEMO_ROAD_COMMISSION_MUNICIPALITY,
     ONBOARDING_DEMO_MUNICIPALITY.slug: ONBOARDING_DEMO_MUNICIPALITY,
 }
+# Compatibility mapping: populated with built-ins plus validated persistent
+# registrations below. Existing imports continue to use the same object.
+MUNICIPALITIES = dict(BUILTIN_MUNICIPALITIES)
 DEFAULT_MUNICIPALITY_SLUG = JACKSON_MUNICIPALITY.slug
 
 
@@ -191,7 +198,26 @@ def validate_municipality_registry(
         )
 
 
-validate_municipality_registry(default_slug=DEFAULT_MUNICIPALITY_SLUG)
+def refresh_persistent_municipalities(
+    root: str | Path = PERSISTENT_MUNICIPALITIES_ROOT,
+) -> Mapping[str, MunicipalityConfig]:
+    """Reload durable registrations and atomically refresh the combined registry."""
+
+    persistent = load_persistent_municipalities(
+        root,
+        built_in_slugs=BUILTIN_MUNICIPALITIES,
+    )
+    combined = {**BUILTIN_MUNICIPALITIES, **persistent}
+    validate_municipality_registry(
+        combined,
+        default_slug=DEFAULT_MUNICIPALITY_SLUG,
+    )
+    MUNICIPALITIES.clear()
+    MUNICIPALITIES.update(combined)
+    return dict(persistent)
+
+
+refresh_persistent_municipalities()
 
 
 def get_municipality_config(slug: str | None) -> MunicipalityConfig:

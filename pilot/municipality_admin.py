@@ -123,6 +123,10 @@ class MunicipalityPortfolioEntry:
     manifest_path: Path | None
     manifest_version: int | None
     config: MunicipalityConfig | None
+    registration_version: int | None = None
+    registration_date: str | None = None
+    registration_state: str | None = None
+    registered_data_path: Path | None = None
 
     @property
     def dashboard_launchable(self) -> bool:
@@ -830,6 +834,19 @@ def _permanent_portfolio_entries() -> list[MunicipalityPortfolioEntry]:
 
     entries = []
     for slug, config in MUNICIPALITIES.items():
+        persistent = None
+        try:
+            from pilot.municipality_registration import (
+                PERSISTENT_MUNICIPALITIES_ROOT,
+                get_persistent_registration,
+            )
+
+            if PERSISTENT_MUNICIPALITIES_ROOT.resolve() in config.data_path.resolve().parents:
+                persistent = get_persistent_registration(slug)
+        except ValueError:
+            # Registry startup has already validated persistent entries. Keep
+            # Portfolio metadata conservative if the registration changes later.
+            persistent = None
         entries.append(MunicipalityPortfolioEntry(
             slug=slug,
             formal_name=config.formal_name,
@@ -853,6 +870,10 @@ def _permanent_portfolio_entries() -> list[MunicipalityPortfolioEntry]:
             ),
             manifest_version=config.onboarding_manifest_version,
             config=config,
+            registration_version=(persistent.registration_version if persistent else None),
+            registration_date=(persistent.registered_at_utc if persistent else None),
+            registration_state=(persistent.registration_state if persistent else None),
+            registered_data_path=(persistent.registration_path if persistent else None),
         ))
     return entries
 
@@ -903,6 +924,26 @@ def _generated_portfolio_entry(
                 manifest_path=manifest,
                 manifest_version=raw_document.get("manifest_version"),
                 config=config,
+                registration_version=(
+                    metadata.get("registration_version")
+                    if isinstance(metadata.get("registration_version"), int)
+                    else None
+                ),
+                registration_date=(
+                    str(metadata.get("registration_date"))
+                    if metadata.get("registration_date")
+                    else None
+                ),
+                registration_state=(
+                    str(metadata.get("registration_state"))
+                    if metadata.get("registration_state")
+                    else None
+                ),
+                registered_data_path=(
+                    Path(str(metadata.get("registered_data_path")))
+                    if metadata.get("registered_data_path")
+                    else None
+                ),
             )
         config = load_onboarding_manifest(manifest)
         if config.slug != directory.name:
