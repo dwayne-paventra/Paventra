@@ -199,7 +199,7 @@ app.run()
 assert not app.exception, [str(item.value) for item in app.exception]
 assert os.environ['EXPECTED_TITLE'] in [item.value for item in app.title]
 assert any(os.environ['EXPECTED_FORMAL'] in item.value for item in app.markdown)
-assert any('Illustrative demonstration analysis' in item.value for item in app.caption)
+assert any(os.environ['EXPECTED_STATUS'] in item.value for item in app.caption)
 
 next(button for button in app.button if button.label == 'Open investment briefing').click().run()
 assert not app.exception, [str(item.value) for item in app.exception]
@@ -222,6 +222,7 @@ assert any(os.environ['EXPECTED_LEADERSHIP'] in item.value for item in app.capti
                 environment["EXPECTED_TITLE"] = config.pilot_name
                 environment["EXPECTED_FORMAL"] = config.formal_name
                 environment["EXPECTED_LEADERSHIP"] = config.leadership_label
+                environment["EXPECTED_STATUS"] = config.data_provenance.analysis_label
                 environment["EXPECTED_BUDGET"] = "${:,.0f}".format(
                     get_scenario_catalog(config.scenario_catalog_id)[
                         "Address Urgent Needs"

@@ -32,8 +32,9 @@ from pilot.municipality_onboarding import (
     parse_onboarding_manifest,
 )
 from pilot.municipality_registry import (
+    DEMO_CITY_MUNICIPALITY,
+    DEMO_ROAD_COMMISSION_MUNICIPALITY,
     JACKSON_MUNICIPALITY,
-    MUNICIPALITIES,
     ONBOARDING_DEMO_MANIFEST_PATH,
     ONBOARDING_DEMO_MUNICIPALITY,
 )
@@ -156,8 +157,14 @@ class DataProvenanceTests(unittest.TestCase):
             )
 
     def test_existing_registered_demos_remain_illustrative(self):
-        for slug, config in MUNICIPALITIES.items():
-            with self.subTest(municipality=slug):
+        existing_demos = (
+            JACKSON_MUNICIPALITY,
+            DEMO_CITY_MUNICIPALITY,
+            DEMO_ROAD_COMMISSION_MUNICIPALITY,
+            ONBOARDING_DEMO_MUNICIPALITY,
+        )
+        for config in existing_demos:
+            with self.subTest(municipality=config.slug):
                 self.assertEqual(config.normalized_data_status, "illustrative")
                 roads = load_municipality_inventory(config)
                 self.assertTrue(roads["data_status"].eq("illustrative").all())

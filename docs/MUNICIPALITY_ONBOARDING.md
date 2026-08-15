@@ -53,6 +53,8 @@ Record dataset-level traceability separately:
 
 For provisional or official data, owner, acquisition date, and reference are required. Illustrative data may omit this metadata or identify an explicitly synthetic source. Use a real acquisition date in strict `YYYY-MM-DD` format. The reference may be a filename, delivery ID, source-system label, or descriptive URL label; it does not need to resolve on the internet. `source_checksum` is optional. If supplied, it must be the 64-character SHA-256 digest of the unchanged source CSV.
 
+To declare a checksum without using a separate hashing tool, use a two-pass dry run: first omit `source_checksum`, run the dry run, copy its `Actual SHA-256` value into the manifest, and run the dry run again. The second run must report `Declared checksum match: yes`. Do not change the source between the two runs.
+
 For the current mapped CSV workflow, keep:
 
 ```json

@@ -127,7 +127,9 @@ class MunicipalityConfigTests(unittest.TestCase):
                 self.assertTrue(roads["County"].eq(roads["Agency"]).all())
                 self.assertTrue(roads["Road ID"].str.strip().ne("").all())
                 self.assertTrue(roads["Risk Score"].between(0, 100).all())
-                self.assertTrue(roads["data_status"].eq("illustrative").all())
+                self.assertTrue(
+                    roads["data_status"].eq(config.normalized_data_status).all()
+                )
 
     def test_unknown_municipality_has_clear_error(self):
         with patch.dict(
