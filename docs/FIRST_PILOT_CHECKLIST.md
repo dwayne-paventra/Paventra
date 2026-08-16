@@ -4,6 +4,8 @@ Copy this file for one engagement. Replace bracketed prompts; use `Unknown` or `
 
 Authoritative procedure: [FIRST_PILOT_INTAKE.md](FIRST_PILOT_INTAKE.md). Command runbook: [MUNICIPALITY_ONBOARDING.md](MUNICIPALITY_ONBOARDING.md).
 
+For the current operator-driven registration, restart, version-update, GIS, and rollback acceptance sequence, use the concise [first real municipality deployment checklist](FIRST_REAL_MUNICIPALITY_DEPLOYMENT_CHECKLIST.md).
+
 ## Record control
 
 - Engagement/reference: [value]
