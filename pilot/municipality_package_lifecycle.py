@@ -31,11 +31,9 @@ from pilot.onboarding_manifest_contract import (
 )
 from pilot.source_provenance import compute_source_checksum
 from pilot.municipality_spatial import (
-    SPATIAL_ARTIFACT_NAME,
     SPATIAL_INPUT_NAME,
-    SPATIAL_METADATA_NAME,
     SPATIAL_REVIEW_NAME,
-    SPATIAL_SOURCE_NAME,
+    spatial_readiness_snapshot,
     validate_spatial_workspace,
 )
 
@@ -254,14 +252,7 @@ def compute_readiness_fingerprint(package_path: str | Path) -> str:
     source_checksum = compute_source_checksum(_source_path(package, document))
     snapshot = {field: document.get(field) for field in _READINESS_FIELDS}
     snapshot["actual_source_checksum"] = source_checksum
-    snapshot["spatial_artifacts"] = {
-        name: compute_source_checksum(package / name)
-        for name in (
-            SPATIAL_INPUT_NAME, SPATIAL_SOURCE_NAME, SPATIAL_ARTIFACT_NAME,
-            SPATIAL_METADATA_NAME, SPATIAL_REVIEW_NAME,
-        )
-        if (package / name).is_file()
-    }
+    snapshot["spatial_artifacts"] = spatial_readiness_snapshot(package)
     encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 

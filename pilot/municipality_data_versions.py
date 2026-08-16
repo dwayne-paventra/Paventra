@@ -17,7 +17,9 @@ import pandas as pd
 
 from pilot.canonical_inventory import validate_canonical_schema
 from pilot.municipality_admin import MunicipalityIdentity, save_real_import_draft
-from pilot.municipality_onboarding import load_onboarding_manifest
+from pilot.municipality_onboarding import (
+    load_onboarded_canonical_inventory, load_onboarding_manifest,
+)
 from pilot.municipality_package_lifecycle import (
     CANONICAL_REVIEW_NAME,
     HISTORY_NAME,
@@ -47,8 +49,9 @@ from pilot.municipality_registration import (
 from pilot.source_provenance import compute_source_checksum
 from pilot.municipality_spatial import (
     SPATIAL_ARTIFACT_NAME, SPATIAL_INPUT_NAME, SPATIAL_METADATA_NAME,
-    SPATIAL_REVIEW_NAME, SPATIAL_SOURCE_NAME, geometry_signatures,
-    load_spatial_artifact, save_spatial_source,
+    copy_spatial_package_artifacts,
+    geometry_signatures, load_spatial_artifact, save_shapefile_source,
+    save_spatial_source, validate_spatial_workspace,
 )
 
 
@@ -274,6 +277,7 @@ def create_update_workspace(
     source_field_meanings: Mapping[str, str] | None = None,
     provenance_confirmed: bool,
     spatial_content: bytes | None = None,
+    spatial_shapefile_files: Mapping[str, bytes] | None = None,
     spatial_source_id_field: str = "",
     spatial_canonical_id_field: str = "segment_id",
     spatial_source_crs: str = "",
@@ -308,6 +312,8 @@ def create_update_workspace(
         generated_root=workspace.parent,
         allow_registered_slug=True,
     )
+    if spatial_content is not None and spatial_shapefile_files is not None:
+        raise ValueError("Choose either GeoJSON or a shapefile bundle, not both.")
     if spatial_content is not None:
         save_spatial_source(
             package, spatial_content,
@@ -319,14 +325,22 @@ def create_update_workspace(
             source_reference=source_reference,
             provenance_confirmed=provenance_confirmed,
         )
+    elif spatial_shapefile_files is not None:
+        save_shapefile_source(
+            package, spatial_shapefile_files,
+            source_id_field=spatial_source_id_field,
+            canonical_id_field=spatial_canonical_id_field,
+            source_owner=source_owner,
+            acquired_date=acquired_date,
+            source_reference=source_reference,
+            provenance_confirmed=provenance_confirmed,
+        )
     else:
-        for name in (
-            SPATIAL_SOURCE_NAME, SPATIAL_INPUT_NAME, SPATIAL_ARTIFACT_NAME,
-            SPATIAL_REVIEW_NAME, SPATIAL_METADATA_NAME,
-        ):
-            source = registered.config.data_directory / name
-            if source.is_file():
-                shutil.copy2(source, package / name)
+        copy_spatial_package_artifacts(registered.config.data_directory, package)
+    if (package / SPATIAL_INPUT_NAME).is_file():
+        candidate_config = load_onboarding_manifest(package / "manifest.json")
+        canonical_preview = load_onboarded_canonical_inventory(candidate_config)
+        validate_spatial_workspace(package, canonical_preview)
     metadata = {
         "update_schema_version": UPDATE_SCHEMA_VERSION,
         "slug": registered.config.slug,
@@ -337,7 +351,10 @@ def create_update_workspace(
         "mapping_reused": mapping is None,
         "defaults_reused": defaults is None,
         "provenance_confirmed": True,
-        "spatial_reused": spatial_content is None and (package / SPATIAL_ARTIFACT_NAME).is_file(),
+        "spatial_reused": (
+            spatial_content is None and spatial_shapefile_files is None
+            and (package / SPATIAL_ARTIFACT_NAME).is_file()
+        ),
         "comparison_path": COMPARISON_NAME,
     }
     _write_json_atomic(package / UPDATE_METADATA_NAME, metadata)
@@ -876,13 +893,7 @@ def _copy_candidate_version(workspace: Path, staging: Path, preview: ActivationP
         if not source.is_file():
             raise ValueError(f"Required candidate version artifact is missing: '{source}'.")
         shutil.copy2(source, destination)
-    for name in (
-        SPATIAL_SOURCE_NAME, SPATIAL_INPUT_NAME, SPATIAL_ARTIFACT_NAME,
-        SPATIAL_REVIEW_NAME, SPATIAL_METADATA_NAME,
-    ):
-        source = workspace / name
-        if source.is_file():
-            shutil.copy2(source, staging / name)
+    copy_spatial_package_artifacts(workspace, staging)
     runtime_manifest = dict(manifest)
     runtime_manifest["source_csv_path"] = "source_roads.csv"
     runtime_manifest["lifecycle_state"] = PackageLifecycleState.REGISTERED.value

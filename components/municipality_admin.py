@@ -39,8 +39,15 @@ from pilot.municipality_package_lifecycle import (
     validate_real_import_package,
 )
 from components.municipality_portfolio import render_municipality_portfolio
+from components.municipality_spatial_intake import render_spatial_upload_controls
+from pilot.municipality_onboarding import (
+    load_onboarded_canonical_inventory,
+    load_onboarding_manifest,
+)
 from pilot.municipality_spatial import (
-    SPATIAL_INPUT_NAME, SPATIAL_REVIEW_NAME, save_spatial_source,
+    SPATIAL_INPUT_NAME, SPATIAL_REVIEW_NAME, inspect_saved_spatial_source,
+    save_shapefile_source, save_spatial_source, suggest_spatial_identifier_fields,
+    update_spatial_identifier_mapping, validate_spatial_workspace,
 )
 
 
@@ -365,16 +372,52 @@ def _render_operational_review(package_path: Path) -> None:
     if spatial_input.is_file():
         with st.expander("Road geometry and spatial provenance", expanded=True):
             settings = json.loads(spatial_input.read_text(encoding="utf-8"))
+            try:
+                source_preview = inspect_saved_spatial_source(package_path)
+            except ValueError as exc:
+                source_preview = None
+                st.error(str(exc))
             st.write(
-                f"GeoJSON join: `{settings.get('source_id_field')}` → "
+                f"{settings.get('format', 'GIS')} join: `{settings.get('source_id_field')}` → "
                 f"`{settings.get('canonical_id_field')}` · source CRS "
-                f"`{settings.get('declared_source_crs') or 'embedded GeoJSON CRS'}` · "
+                f"`{settings.get('detected_source_crs') or settings.get('declared_source_crs') or 'embedded GeoJSON CRS'}` · "
                 "runtime CRS `EPSG:4326`"
             )
             st.caption(
                 f"Geometry source: {settings.get('source_reference')} · "
                 f"owner {settings.get('source_owner')} · acquired {settings.get('acquired_date')}"
             )
+            if source_preview is not None:
+                suggestions = suggest_spatial_identifier_fields(source_preview.attribute_columns)
+                if suggestions:
+                    st.caption("Identifier suggestions: " + ", ".join(suggestions))
+                current_source = settings.get("source_id_field", "")
+                source_options = list(source_preview.attribute_columns)
+                selected_source = st.selectbox(
+                    "Reviewed GIS identifier field",
+                    source_options,
+                    index=(source_options.index(current_source) if current_source in source_options else 0),
+                    key=f"review_spatial_source_{package_path.name}",
+                )
+                selected_canonical = st.selectbox(
+                    "Reviewed canonical target",
+                    ["segment_id", "road_id"],
+                    index=0 if settings.get("canonical_id_field") == "segment_id" else 1,
+                    key=f"review_spatial_canonical_{package_path.name}",
+                )
+                if st.button(
+                    "Update exact GIS mapping and refresh preview",
+                    key=f"review_spatial_update_{package_path.name}",
+                ):
+                    update_spatial_identifier_mapping(
+                        package_path,
+                        source_id_field=selected_source,
+                        canonical_id_field=selected_canonical,
+                    )
+                    config = load_onboarding_manifest(package_path / "manifest.json")
+                    canonical_preview = load_onboarded_canonical_inventory(config)
+                    validate_spatial_workspace(package_path, canonical_preview)
+                    st.rerun()
             review_path = package_path / SPATIAL_REVIEW_NAME
             if review_path.is_file():
                 review = json.loads(review_path.read_text(encoding="utf-8"))
@@ -385,10 +428,29 @@ def _render_operational_review(package_path: Path) -> None:
                     "Unmatched canonical": len(review.get("unmatched_canonical_ids", [])),
                     "Unmatched GIS": len(review.get("unmatched_source_ids", [])),
                     "Duplicate GIS IDs": len(review.get("duplicate_source_ids", [])),
+                    "Duplicate canonical IDs": len(review.get("duplicate_canonical_ids", [])),
+                    "Match coverage": f"{review.get('match_percentage', 0):.1f}%",
+                    "LineStrings": review.get("linestring_count", 0),
+                    "MultiLineStrings": review.get("multilinestring_count", 0),
+                    "Empty geometry": review.get("empty_geometry_count", 0),
+                    "Invalid geometry": review.get("invalid_geometry_count", 0),
+                    "Bounds": review.get("geometry_bounds"),
                     "Source CRS": review.get("source_crs"),
                     "Target CRS": review.get("target_crs"),
                     "Result": review.get("result"),
                 }]), hide_index=True, width="stretch")
+                st.caption(
+                    "Spatial validation requires valid geometry for every canonical segment. "
+                    "Partial coverage remains blocking and is never presented as complete."
+                )
+                samples = {
+                    "Exact-match sample": review.get("matched_ids", [])[:5],
+                    "GIS-only sample": review.get("unmatched_source_ids", [])[:5],
+                    "Canonical-only sample": review.get("unmatched_canonical_ids", [])[:5],
+                    "Duplicate GIS sample": review.get("duplicate_source_ids", [])[:5],
+                }
+                if any(samples.values()):
+                    st.json(samples)
 
     state = inspection.lifecycle_state
     if st.button("Validate saved package", key="validate_saved_import"):
@@ -504,23 +566,8 @@ def _render_real_import() -> None:
     declared_checksum = st.text_input(
         "Declared SHA-256 (optional)", key="import_declared_checksum"
     )
-    with st.expander("Optional municipal road geometry (GeoJSON)"):
-        st.caption(
-            "Upload LineString/MultiLineString GeoJSON. Shapefile bundles are not accepted in "
-            "this workflow because their required sidecar files cannot be preserved atomically."
-        )
-        spatial_upload = st.file_uploader(
-            "Upload road geometry GeoJSON", type=["geojson", "json"], key="import_spatial_upload"
-        )
-        spatial_id_field = st.text_input(
-            "GeoJSON identifier property", value="segment_id", key="import_spatial_id_field"
-        )
-        spatial_canonical_id = st.selectbox(
-            "Join to canonical identifier", ["segment_id", "road_id"], key="import_spatial_canonical_id"
-        )
-        spatial_crs = st.text_input(
-            "Source CRS (required if GeoJSON has no CRS)", value="EPSG:4326", key="import_spatial_crs"
-        )
+    with st.expander("Optional municipal road geometry", expanded=False):
+        spatial_selection = render_spatial_upload_controls(key_prefix="import_spatial")
         spatial_reference = st.text_input(
             "Geometry source reference", key="import_spatial_reference"
         )
@@ -586,6 +633,10 @@ def _render_real_import() -> None:
                 raise ValueError(
                     "A reopened package slug cannot be changed in place. Start a new import for a new slug."
                 )
+            if spatial_selection.source_type != "none" and spatial_selection.preview is None:
+                raise ValueError("Complete and resolve the selected GIS upload before saving the draft.")
+            if spatial_selection.preview is not None and not spatial_selection.source_id_field:
+                raise ValueError("Select a usable GIS identifier field before saving the draft.")
             package_path = save_real_import_draft(
                 identity,
                 content,
@@ -598,18 +649,33 @@ def _render_real_import() -> None:
                 declared_checksum=declared_checksum or None,
                 source_field_meanings=meanings,
             )
-            if spatial_upload is not None:
+            if spatial_selection.source_type == "geojson" and spatial_selection.geojson_content is not None:
                 save_spatial_source(
                     package_path,
-                    spatial_upload.getvalue(),
-                    source_id_field=spatial_id_field,
-                    canonical_id_field=spatial_canonical_id,
-                    source_crs=spatial_crs,
+                    spatial_selection.geojson_content,
+                    source_id_field=spatial_selection.source_id_field,
+                    canonical_id_field=spatial_selection.canonical_id_field,
+                    source_crs=spatial_selection.source_crs,
                     source_owner=owner,
                     acquired_date=acquired.isoformat(),
                     source_reference=spatial_reference,
                     provenance_confirmed=spatial_confirmed,
                 )
+            elif spatial_selection.source_type == "shapefile" and spatial_selection.shapefile_files is not None:
+                save_shapefile_source(
+                    package_path,
+                    spatial_selection.shapefile_files,
+                    source_id_field=spatial_selection.source_id_field,
+                    canonical_id_field=spatial_selection.canonical_id_field,
+                    source_owner=owner,
+                    acquired_date=acquired.isoformat(),
+                    source_reference=spatial_reference,
+                    provenance_confirmed=spatial_confirmed,
+                )
+            if spatial_selection.source_type != "none" and (package_path / SPATIAL_INPUT_NAME).is_file():
+                config = load_onboarding_manifest(package_path / "manifest.json")
+                canonical_preview = load_onboarded_canonical_inventory(config)
+                validate_spatial_workspace(package_path, canonical_preview)
             st.session_state["paventra_real_import_slug"] = identity.slug
             st.session_state["paventra_real_import_hydrated"] = identity.slug
             st.success(f"Draft workspace saved at {package_path}.")

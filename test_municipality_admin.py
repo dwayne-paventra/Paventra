@@ -401,6 +401,17 @@ class MunicipalityAdminTests(unittest.TestCase):
         self.assertTrue(any(item.value == "Import Municipality Data" for item in app.header))
         self.assertEqual(app.selectbox(key="import_status").value, "provisional")
         self.assertTrue(any(item.label == "Upload municipality road inventory CSV" for item in app.get("file_uploader")))
+        gis_source = app.radio(key="import_spatial_source_type")
+        self.assertEqual(
+            list(gis_source.options),
+            ["No GIS geometry", "GeoJSON", "Shapefile bundle"],
+        )
+        gis_source.set_value("Shapefile bundle").run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any(
+            item.label == "Upload shapefile bundle"
+            for item in app.get("file_uploader")
+        ))
 
     def test_operator_demo_expected_validation_error_has_no_traceback(self):
         from streamlit.testing.v1 import AppTest

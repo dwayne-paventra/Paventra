@@ -28,9 +28,9 @@ from pilot.municipality_package_lifecycle import (
 )
 from pilot.source_provenance import compute_source_checksum
 from pilot.municipality_spatial import (
-    SPATIAL_ARTIFACT_NAME, SPATIAL_INPUT_NAME, SPATIAL_METADATA_NAME,
-    SPATIAL_REVIEW_NAME, SPATIAL_SOURCE_NAME, load_spatial_artifact,
-    validate_runtime_spatial_artifact,
+    SPATIAL_ARTIFACT_NAME, SPATIAL_METADATA_NAME, copy_spatial_package_artifacts,
+    load_spatial_artifact, validate_runtime_spatial_artifact,
+    validate_preserved_spatial_source,
 )
 
 
@@ -322,6 +322,7 @@ def load_persistent_registration_directory(directory: str | Path) -> RegisteredM
     spatial_count = validate_runtime_spatial_artifact(config.data_directory, canonical)
     if spatial_count is not None and spatial_count != metadata.get("spatial_feature_count"):
         raise ValueError(f"Persistent registration '{config.slug}' spatial validation count does not match.")
+    validate_preserved_spatial_source(config.data_directory)
     from pilot.municipality_onboarding import validate_onboarding_configuration
 
     validate_onboarding_configuration(config)
@@ -544,13 +545,7 @@ def _copy_registration_snapshot(package: Path, staging: Path, preview: Registrat
         if not source.is_file():
             raise ValueError(f"Required registration artifact is missing: '{source}'.")
         shutil.copy2(source, destination)
-    for name in (
-        SPATIAL_SOURCE_NAME, SPATIAL_INPUT_NAME, SPATIAL_ARTIFACT_NAME,
-        SPATIAL_REVIEW_NAME, SPATIAL_METADATA_NAME,
-    ):
-        source = package / name
-        if source.is_file():
-            shutil.copy2(source, version_root / name)
+    copy_spatial_package_artifacts(package, version_root)
 
     runtime_manifest = dict(source_manifest)
     runtime_manifest["source_csv_path"] = "source_roads.csv"

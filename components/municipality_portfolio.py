@@ -9,6 +9,8 @@ import json
 import pandas as pd
 import streamlit as st
 
+from components.municipality_spatial_intake import render_spatial_upload_controls
+
 from pilot.municipality_admin import (
     ARCHIVED_MUNICIPALITIES_ROOT,
     GENERATED_MUNICIPALITIES_ROOT,
@@ -53,6 +55,7 @@ from pilot.municipality_registry import (
     BUILTIN_MUNICIPALITIES,
     refresh_persistent_municipalities,
 )
+from pilot.municipality_spatial import SPATIAL_REVIEW_NAME, load_spatial_metadata
 
 
 def _open_dashboard(config, *, runtime: bool) -> None:
@@ -108,6 +111,19 @@ def _clone_form(entry) -> None:
 
 
 def _persistent_version_controls(entry) -> None:
+    spatial_metadata = load_spatial_metadata(entry.config.data_directory)
+    st.subheader("Active GIS details")
+    st.dataframe(pd.DataFrame([{
+        "Geometry available": "Yes" if spatial_metadata else "No",
+        "Source format": spatial_metadata.get("source_format", "—") if spatial_metadata else "—",
+        "Feature count": spatial_metadata.get("feature_count", 0) if spatial_metadata else 0,
+        "Match coverage": (
+            f"{spatial_metadata.get('match_coverage_percent', 0):.1f}%"
+            if spatial_metadata else "—"
+        ),
+        "Source CRS": spatial_metadata.get("source_crs", "—") if spatial_metadata else "—",
+        "Geometry version": entry.config.data_version or "Built-in",
+    }]), hide_index=True, width="stretch")
     """Render permanent-version history and isolated candidate update controls."""
 
     st.subheader("Data Version History")
@@ -192,22 +208,12 @@ def _persistent_version_controls(entry) -> None:
             type=["csv"],
             key=f"version_upload_{entry.slug}",
         )
-        spatial_uploaded = st.file_uploader(
-            "Optional candidate road geometry GeoJSON",
-            type=["geojson", "json"],
-            key=f"version_spatial_upload_{entry.slug}",
-        )
-        spatial_id_field = st.text_input(
-            "GeoJSON identifier property", value="segment_id",
-            key=f"version_spatial_id_{entry.slug}",
-        )
-        spatial_canonical_id = st.selectbox(
-            "Geometry join target", ["segment_id", "road_id"],
-            key=f"version_spatial_canonical_{entry.slug}",
-        )
-        spatial_crs = st.text_input(
-            "Geometry source CRS", value="EPSG:4326",
-            key=f"version_spatial_crs_{entry.slug}",
+        spatial_selection = render_spatial_upload_controls(
+            key_prefix=f"version_spatial_{entry.slug}",
+            no_gis_message=(
+                "No replacement GIS file: the active version's reviewed geometry will be "
+                "inherited. If none exists, marker fallback remains available."
+            ),
         )
         owner = st.text_input("Source owner", key=f"version_owner_{entry.slug}")
         acquired = st.date_input(
@@ -276,6 +282,10 @@ def _persistent_version_controls(entry) -> None:
             try:
                 active_mapping = dict(entry.config.source_column_mapping or {})
                 active_defaults = dict(entry.config.canonical_defaults or {})
+                if spatial_selection.source_type != "none" and spatial_selection.preview is None:
+                    raise ValueError("Complete and resolve the selected GIS upload before creating the candidate.")
+                if spatial_selection.preview is not None and not spatial_selection.source_id_field:
+                    raise ValueError("Select a usable GIS identifier field before creating the candidate.")
                 workspace = create_update_workspace(
                     entry.slug,
                     content,
@@ -286,12 +296,11 @@ def _persistent_version_controls(entry) -> None:
                     mapping=None if mapping == active_mapping else mapping,
                     defaults=None if defaults == active_defaults else defaults,
                     provenance_confirmed=provenance_confirmed,
-                    spatial_content=(
-                        spatial_uploaded.getvalue() if spatial_uploaded is not None else None
-                    ),
-                    spatial_source_id_field=spatial_id_field,
-                    spatial_canonical_id_field=spatial_canonical_id,
-                    spatial_source_crs=spatial_crs,
+                    spatial_content=spatial_selection.geojson_content,
+                    spatial_shapefile_files=spatial_selection.shapefile_files,
+                    spatial_source_id_field=spatial_selection.source_id_field,
+                    spatial_canonical_id_field=spatial_selection.canonical_id_field,
+                    spatial_source_crs=spatial_selection.source_crs,
                 )
                 st.success(f"Candidate update workspace created: {workspace}")
                 st.rerun()
@@ -321,6 +330,30 @@ def _persistent_version_controls(entry) -> None:
     if inspection.blocking_issues:
         for issue in inspection.blocking_issues:
             st.error(f"{issue.field}: {issue.message}")
+    spatial_review_path = workspace / SPATIAL_REVIEW_NAME
+    if spatial_review_path.is_file():
+        spatial_review = json.loads(spatial_review_path.read_text(encoding="utf-8"))
+        st.subheader("Candidate GIS exact-match preview")
+        st.dataframe(pd.DataFrame([{
+            "Result": spatial_review.get("result"),
+            "Features": spatial_review.get("feature_count"),
+            "Canonical": spatial_review.get("canonical_row_count"),
+            "Exact matches": spatial_review.get("matched_count"),
+            "Match coverage": f"{spatial_review.get('match_percentage', 0):.1f}%",
+            "GIS-only": len(spatial_review.get("unmatched_source_ids", [])),
+            "Canonical-only": len(spatial_review.get("unmatched_canonical_ids", [])),
+            "Duplicate GIS": len(spatial_review.get("duplicate_source_ids", [])),
+            "Duplicate canonical": len(spatial_review.get("duplicate_canonical_ids", [])),
+            "Source CRS": spatial_review.get("source_crs"),
+            "Target CRS": spatial_review.get("target_crs"),
+        }]), hide_index=True, width="stretch")
+        st.json({
+            "Exact-match sample": spatial_review.get("matched_ids", [])[:5],
+            "GIS-only sample": spatial_review.get("unmatched_source_ids", [])[:5],
+            "Canonical-only sample": spatial_review.get("unmatched_canonical_ids", [])[:5],
+        })
+        if spatial_review.get("result") == "BLOCKING":
+            st.error("Candidate geometry cannot be activated until every blocking exact-match or geometry issue is corrected.")
     if inspection.comparison is not None:
         comparison = inspection.comparison.as_dict()
         st.subheader("Version Comparison")
