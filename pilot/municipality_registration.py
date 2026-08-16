@@ -27,6 +27,11 @@ from pilot.municipality_package_lifecycle import (
     refresh_real_import_readiness,
 )
 from pilot.source_provenance import compute_source_checksum
+from pilot.municipality_spatial import (
+    SPATIAL_ARTIFACT_NAME, SPATIAL_INPUT_NAME, SPATIAL_METADATA_NAME,
+    SPATIAL_REVIEW_NAME, SPATIAL_SOURCE_NAME, load_spatial_artifact,
+    validate_runtime_spatial_artifact,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -268,6 +273,21 @@ def load_persistent_registration_directory(directory: str | Path) -> RegisteredM
         raise ValueError(f"Persistent registration '{config.slug}' source checksum does not match.")
     if compute_source_checksum(canonical_path) != metadata["canonical_checksum"]:
         raise ValueError(f"Persistent registration '{config.slug}' canonical checksum does not match.")
+    spatial_path_value = metadata.get("spatial_artifact_path")
+    if spatial_path_value:
+        spatial_path = _safe_relative_path(
+            registration_path, spatial_path_value, "spatial_artifact_path"
+        )
+        if compute_source_checksum(spatial_path) != metadata.get("spatial_checksum"):
+            raise ValueError(f"Persistent registration '{config.slug}' spatial checksum does not match.")
+        spatial = load_spatial_artifact(config.data_directory)
+        if spatial is None or len(spatial.get("features", [])) != metadata.get("spatial_feature_count"):
+            raise ValueError(f"Persistent registration '{config.slug}' spatial feature count does not match.")
+        spatial_metadata = _read_json(
+            config.data_directory / SPATIAL_METADATA_NAME, "Spatial metadata"
+        )
+        if spatial_metadata != metadata.get("spatial_provenance"):
+            raise ValueError(f"Persistent registration '{config.slug}' spatial provenance does not match.")
 
     manifest_document = _read_json(manifest_path, "Registered manifest snapshot")
     expected_config = {
@@ -299,6 +319,9 @@ def load_persistent_registration_directory(directory: str | Path) -> RegisteredM
         expected_data_status=config.normalized_data_status,
         municipality_slug=config.slug,
     )
+    spatial_count = validate_runtime_spatial_artifact(config.data_directory, canonical)
+    if spatial_count is not None and spatial_count != metadata.get("spatial_feature_count"):
+        raise ValueError(f"Persistent registration '{config.slug}' spatial validation count does not match.")
     from pilot.municipality_onboarding import validate_onboarding_configuration
 
     validate_onboarding_configuration(config)
@@ -521,6 +544,13 @@ def _copy_registration_snapshot(package: Path, staging: Path, preview: Registrat
         if not source.is_file():
             raise ValueError(f"Required registration artifact is missing: '{source}'.")
         shutil.copy2(source, destination)
+    for name in (
+        SPATIAL_SOURCE_NAME, SPATIAL_INPUT_NAME, SPATIAL_ARTIFACT_NAME,
+        SPATIAL_REVIEW_NAME, SPATIAL_METADATA_NAME,
+    ):
+        source = package / name
+        if source.is_file():
+            shutil.copy2(source, version_root / name)
 
     runtime_manifest = dict(source_manifest)
     runtime_manifest["source_csv_path"] = "source_roads.csv"
@@ -563,6 +593,17 @@ def _copy_registration_snapshot(package: Path, staging: Path, preview: Registrat
         "validation_result": "PASS",
         "source_package_path": str(package),
     }
+    if (version_root / SPATIAL_ARTIFACT_NAME).is_file():
+        spatial = load_spatial_artifact(version_root)
+        spatial_metadata = _read_json(
+            version_root / SPATIAL_METADATA_NAME, "Spatial metadata"
+        )
+        metadata.update({
+            "spatial_artifact_path": f"versions/{INITIAL_DATA_VERSION}/{SPATIAL_ARTIFACT_NAME}",
+            "spatial_checksum": compute_source_checksum(version_root / SPATIAL_ARTIFACT_NAME),
+            "spatial_feature_count": len(spatial.get("features", [])),
+            "spatial_provenance": spatial_metadata,
+        })
     version_record = {
         "data_version": INITIAL_DATA_VERSION,
         "manifest_path": metadata["active_manifest_path"],
@@ -579,6 +620,12 @@ def _copy_registration_snapshot(package: Path, staging: Path, preview: Registrat
         "source_provenance": metadata["source_provenance"],
         "row_count": preview.segment_count,
     }
+    for field in (
+        "spatial_artifact_path", "spatial_checksum", "spatial_feature_count",
+        "spatial_provenance",
+    ):
+        if field in metadata:
+            version_record[field] = metadata[field]
     metadata["version_records"] = {str(INITIAL_DATA_VERSION): version_record}
     _write_json_atomic(staging / REGISTRATION_METADATA_NAME, metadata)
     _write_json_atomic(version_root / "version.json", version_record)
@@ -609,6 +656,7 @@ def verify_registered_municipality(directory: str | Path) -> RegisteredMunicipal
         selected_ids=results["selected_ids"],
         map_center=registered.config.map_center,
         zoom_start=registered.config.map_zoom,
+        road_geometry=load_spatial_artifact(registered.config.data_directory),
     )
     if road_map is None:
         raise ValueError("Registered municipality map initialization failed.")

@@ -7,6 +7,7 @@ from streamlit_folium import st_folium
 
 from gis.engine import create_network_map
 from pilot.municipality_config import MunicipalityConfig
+from pilot.municipality_spatial import load_spatial_artifact
 
 
 def render_municipality_map(
@@ -18,7 +19,7 @@ def render_municipality_map(
     st.subheader("2. Risk and network map")
     st.caption(
         f"{len(roads)} inventory segments centered on {config.short_name}. "
-        "Marker color shows calculated risk; starred markers are projects funded by the selected strategy."
+        "Road color shows calculated risk; highlighted roads are projects funded by the selected strategy."
     )
     if config.normalized_data_status == "illustrative":
         st.info(
@@ -53,6 +54,7 @@ def render_municipality_map(
             selected_ids=selected_ids,
             map_center=config.map_center,
             zoom_start=config.map_zoom,
+            road_geometry=load_spatial_artifact(config.data_directory),
         )
         st_folium(road_map, width=None, height=560, returned_objects=[])
     except Exception:

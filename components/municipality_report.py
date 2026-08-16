@@ -21,6 +21,7 @@ from reportlab.platypus import (
 
 from pilot.municipality_config import MunicipalityConfig, validate_municipality_config
 from pilot.data_provenance import resolve_inventory_data_status
+from pilot.municipality_spatial import load_spatial_artifact
 
 
 def municipality_report_title(config: MunicipalityConfig) -> str:
@@ -91,6 +92,7 @@ def build_municipality_report(
     )
     provenance = config.data_provenance
     data_version = municipality_report_data_version(config, roads)
+    spatial = load_spatial_artifact(config.data_directory)
     story = [Paragraph(f"Paventra | {escape(config.pilot_name)}", heading)]
     story.append(Paragraph(escape(municipality_report_title(config)), title))
     story.append(Paragraph(
@@ -110,6 +112,7 @@ def build_municipality_report(
     story.append(Paragraph("Network condition", heading))
     metrics = [
         ["Data status", provenance.label],
+        ["Road geometry", f"{len(spatial.get('features', []))} municipal line features" if spatial else "Coordinate markers (no municipal line file)"],
         ["Average PCI", f"{roads['PCI'].mean():.0f}"],
         ["High-risk segments", str(int((roads["Risk Level"] == "High").sum()))],
         [

@@ -16,11 +16,27 @@ from gis.markers import (
     add_standard_marker,
 )
 from gis.popups import build_popup
+from gis.styles import risk_color
 
 
 GEOMETRY_PATH = (
     "data/geometry/michigan/roads/gis_osm_roads_free_1.shp"
 )
+
+
+def _flatten_coordinates(value):
+    """Yield GeoJSON coordinate pairs from line or multiline nesting."""
+
+    if (
+        isinstance(value, (list, tuple))
+        and len(value) >= 2
+        and all(isinstance(item, (int, float)) for item in value[:2])
+    ):
+        yield float(value[0]), float(value[1])
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _flatten_coordinates(item)
 
 
 def create_network_map(
@@ -30,6 +46,7 @@ def create_network_map(
     show_geometry=False,
     map_center=None,
     zoom_start=11,
+    road_geometry=None,
 ):
     """
     Create the Paventra interactive GIS map.
@@ -96,13 +113,11 @@ def create_network_map(
         show=True,
     )
 
-    road_cluster = MarkerCluster().add_to(
-        road_layer
-    )
-
-    priority_cluster = MarkerCluster().add_to(
-        priority_layer
-    )
+    road_cluster = None
+    priority_cluster = None
+    if road_geometry is None:
+        road_cluster = MarkerCluster().add_to(road_layer)
+        priority_cluster = MarkerCluster().add_to(priority_layer)
 
     # -------------------------------------------------
     # Marker selection lookup
@@ -117,31 +132,65 @@ def create_network_map(
     # Render Markers
     # -------------------------------------------------
 
-    for _, road in roads.iterrows():
-
-        popup = build_popup(
-            road
-        )
-
-        road_id = str(
-            road["Road ID"]
-        ).strip()
-
-        if road_id in selected_lookup:
-
-            add_priority_marker(
-                priority_cluster,
-                road,
-                popup,
+    if road_geometry is not None:
+        by_segment = {
+            str(row.get("segment_id", "")).strip(): row
+            for _, row in roads.iterrows()
+        }
+        by_road = {str(row["Road ID"]).strip(): row for _, row in roads.iterrows()}
+        for feature in road_geometry.get("features", []):
+            properties = feature.get("properties", {})
+            segment_id = str(properties.get("segment_id", "")).strip()
+            road_id = str(properties.get("road_id", "")).strip()
+            road = by_segment.get(segment_id)
+            if road is None:
+                road = by_road.get(road_id)
+            if road is None:
+                continue
+            is_priority = road_id in selected_lookup
+            risk = float(road.get("Risk Score", 0))
+            color = risk_color(risk)
+            layer = priority_layer if is_priority else road_layer
+            if is_priority:
+                folium.GeoJson(
+                    data=feature,
+                    style_function=lambda _feature: {
+                        "color": "#FFD54F", "weight": 10, "opacity": 0.85,
+                    },
+                ).add_to(layer)
+            line = folium.GeoJson(
+                data=feature,
+                style_function=lambda _feature, color=color, priority=is_priority: {
+                    "color": color,
+                    "weight": 6 if priority else 5,
+                    "opacity": 0.95,
+                },
+                highlight_function=lambda _feature: {"weight": 8, "opacity": 1.0},
             )
+            line.add_child(folium.Popup(build_popup(road), max_width=420))
+            line.add_to(layer)
+        coordinates = [
+            coordinate
+            for feature in road_geometry.get("features", [])
+            for coordinate in _flatten_coordinates(feature.get("geometry", {}).get("coordinates", []))
+        ]
+        if coordinates:
+            longitudes, latitudes = zip(*coordinates)
+            road_map.fit_bounds([[min(latitudes), min(longitudes)], [max(latitudes), max(longitudes)]])
+    else:
+        for _, road in roads.iterrows():
 
-        else:
+            popup = build_popup(road)
 
-            add_standard_marker(
-                road_cluster,
-                road,
-                popup,
-            )
+            road_id = str(road["Road ID"]).strip()
+
+            if road_id in selected_lookup:
+
+                add_priority_marker(priority_cluster, road, popup)
+
+            else:
+
+                add_standard_marker(road_cluster, road, popup)
 
     # -------------------------------------------------
     # Selected Road Geometry

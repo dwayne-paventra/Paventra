@@ -192,6 +192,23 @@ def _persistent_version_controls(entry) -> None:
             type=["csv"],
             key=f"version_upload_{entry.slug}",
         )
+        spatial_uploaded = st.file_uploader(
+            "Optional candidate road geometry GeoJSON",
+            type=["geojson", "json"],
+            key=f"version_spatial_upload_{entry.slug}",
+        )
+        spatial_id_field = st.text_input(
+            "GeoJSON identifier property", value="segment_id",
+            key=f"version_spatial_id_{entry.slug}",
+        )
+        spatial_canonical_id = st.selectbox(
+            "Geometry join target", ["segment_id", "road_id"],
+            key=f"version_spatial_canonical_{entry.slug}",
+        )
+        spatial_crs = st.text_input(
+            "Geometry source CRS", value="EPSG:4326",
+            key=f"version_spatial_crs_{entry.slug}",
+        )
         owner = st.text_input("Source owner", key=f"version_owner_{entry.slug}")
         acquired = st.date_input(
             "Acquisition or extraction date",
@@ -269,6 +286,12 @@ def _persistent_version_controls(entry) -> None:
                     mapping=None if mapping == active_mapping else mapping,
                     defaults=None if defaults == active_defaults else defaults,
                     provenance_confirmed=provenance_confirmed,
+                    spatial_content=(
+                        spatial_uploaded.getvalue() if spatial_uploaded is not None else None
+                    ),
+                    spatial_source_id_field=spatial_id_field,
+                    spatial_canonical_id_field=spatial_canonical_id,
+                    spatial_source_crs=spatial_crs,
                 )
                 st.success(f"Candidate update workspace created: {workspace}")
                 st.rerun()

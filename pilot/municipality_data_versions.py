@@ -45,6 +45,11 @@ from pilot.municipality_registration import (
     verify_registered_municipality,
 )
 from pilot.source_provenance import compute_source_checksum
+from pilot.municipality_spatial import (
+    SPATIAL_ARTIFACT_NAME, SPATIAL_INPUT_NAME, SPATIAL_METADATA_NAME,
+    SPATIAL_REVIEW_NAME, SPATIAL_SOURCE_NAME, geometry_signatures,
+    load_spatial_artifact, save_spatial_source,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -82,6 +87,9 @@ class VersionComparison:
     adt_change_count: int
     treatment_change_count: int
     coordinate_change_count: int
+    geometry_added_count: int
+    geometry_removed_count: int
+    geometry_changed_count: int
     current_source_checksum: str
     candidate_source_checksum: str
     current_data_status: str
@@ -104,6 +112,9 @@ class VersionComparison:
             "adt_change_count": self.adt_change_count,
             "treatment_change_count": self.treatment_change_count,
             "coordinate_change_count": self.coordinate_change_count,
+            "geometry_added_count": self.geometry_added_count,
+            "geometry_removed_count": self.geometry_removed_count,
+            "geometry_changed_count": self.geometry_changed_count,
             "current_source_checksum": self.current_source_checksum,
             "candidate_source_checksum": self.candidate_source_checksum,
             "current_data_status": self.current_data_status,
@@ -262,6 +273,10 @@ def create_update_workspace(
     defaults: Mapping[str, Any] | None = None,
     source_field_meanings: Mapping[str, str] | None = None,
     provenance_confirmed: bool,
+    spatial_content: bytes | None = None,
+    spatial_source_id_field: str = "",
+    spatial_canonical_id_field: str = "segment_id",
+    spatial_source_crs: str = "",
     registration_root: str | Path = PERSISTENT_MUNICIPALITIES_ROOT,
     workspace_root: str | Path = UPDATE_WORKSPACES_ROOT,
 ) -> Path:
@@ -293,6 +308,25 @@ def create_update_workspace(
         generated_root=workspace.parent,
         allow_registered_slug=True,
     )
+    if spatial_content is not None:
+        save_spatial_source(
+            package, spatial_content,
+            source_id_field=spatial_source_id_field,
+            canonical_id_field=spatial_canonical_id_field,
+            source_crs=spatial_source_crs,
+            source_owner=source_owner,
+            acquired_date=acquired_date,
+            source_reference=source_reference,
+            provenance_confirmed=provenance_confirmed,
+        )
+    else:
+        for name in (
+            SPATIAL_SOURCE_NAME, SPATIAL_INPUT_NAME, SPATIAL_ARTIFACT_NAME,
+            SPATIAL_REVIEW_NAME, SPATIAL_METADATA_NAME,
+        ):
+            source = registered.config.data_directory / name
+            if source.is_file():
+                shutil.copy2(source, package / name)
     metadata = {
         "update_schema_version": UPDATE_SCHEMA_VERSION,
         "slug": registered.config.slug,
@@ -303,6 +337,7 @@ def create_update_workspace(
         "mapping_reused": mapping is None,
         "defaults_reused": defaults is None,
         "provenance_confirmed": True,
+        "spatial_reused": spatial_content is None and (package / SPATIAL_ARTIFACT_NAME).is_file(),
         "comparison_path": COMPARISON_NAME,
     }
     _write_json_atomic(package / UPDATE_METADATA_NAME, metadata)
@@ -424,6 +459,9 @@ def compare_candidate_to_active(
     new_roads = set(new["road_id"].astype(str))
     old_indexed = old.set_index("segment_id", drop=False)
     new_indexed = new.set_index("segment_id", drop=False)
+    old_geometry = geometry_signatures(registered.config.data_directory)
+    new_geometry = geometry_signatures(workspace)
+    common_geometry = set(old_geometry) & set(new_geometry)
     issues: list[RegistrationIssue] = [RegistrationIssue(
         "informational", "source_checksum", "Candidate source checksum differs from the active version."
     )]
@@ -449,6 +487,9 @@ def compare_candidate_to_active(
         adt_change_count=_changed_count(old_indexed, new_indexed, ("adt", "traffic_level")),
         treatment_change_count=_changed_count(old_indexed, new_indexed, ("recommended_treatment",)),
         coordinate_change_count=_changed_count(old_indexed, new_indexed, ("latitude", "longitude")),
+        geometry_added_count=len(set(new_geometry) - set(old_geometry)),
+        geometry_removed_count=len(set(old_geometry) - set(new_geometry)),
+        geometry_changed_count=sum(old_geometry[key] != new_geometry[key] for key in common_geometry),
         current_source_checksum=compute_source_checksum(registered.config.data_path),
         candidate_source_checksum=compute_source_checksum(candidate_config.data_path),
         current_data_status=registered.config.normalized_data_status,
@@ -485,6 +526,9 @@ def _comparison_from_disk(workspace: Path) -> VersionComparison | None:
         adt_change_count=value["adt_change_count"],
         treatment_change_count=value["treatment_change_count"],
         coordinate_change_count=value["coordinate_change_count"],
+        geometry_added_count=value.get("geometry_added_count", 0),
+        geometry_removed_count=value.get("geometry_removed_count", 0),
+        geometry_changed_count=value.get("geometry_changed_count", 0),
         current_source_checksum=value["current_source_checksum"],
         candidate_source_checksum=value["candidate_source_checksum"],
         current_data_status=value["current_data_status"],
@@ -757,7 +801,7 @@ def _active_record(metadata: Mapping[str, Any]) -> dict[str, Any]:
     records = metadata.get("version_records", {})
     if str(version) in records:
         return dict(records[str(version)])
-    return {
+    record = {
         "data_version": version,
         "manifest_path": metadata["active_manifest_path"],
         "canonical_inventory_path": metadata["canonical_inventory_path"],
@@ -774,6 +818,13 @@ def _active_record(metadata: Mapping[str, Any]) -> dict[str, Any]:
             "active_version_activated_at_utc", metadata["registered_at_utc"]
         ),
     }
+    for field in (
+        "spatial_artifact_path", "spatial_checksum", "spatial_feature_count",
+        "spatial_provenance",
+    ):
+        if field in metadata:
+            record[field] = metadata[field]
+    return record
 
 
 def _metadata_for_record(metadata: Mapping[str, Any], record: Mapping[str, Any]) -> dict[str, Any]:
@@ -793,6 +844,14 @@ def _metadata_for_record(metadata: Mapping[str, Any], record: Mapping[str, Any])
         "source_provenance": record["source_provenance"],
         "active_version_activated_at_utc": _utc_timestamp(),
     })
+    for field in (
+        "spatial_artifact_path", "spatial_checksum", "spatial_feature_count",
+        "spatial_provenance",
+    ):
+        if field in record:
+            updated[field] = record[field]
+        else:
+            updated.pop(field, None)
     return updated
 
 
@@ -817,6 +876,13 @@ def _copy_candidate_version(workspace: Path, staging: Path, preview: ActivationP
         if not source.is_file():
             raise ValueError(f"Required candidate version artifact is missing: '{source}'.")
         shutil.copy2(source, destination)
+    for name in (
+        SPATIAL_SOURCE_NAME, SPATIAL_INPUT_NAME, SPATIAL_ARTIFACT_NAME,
+        SPATIAL_REVIEW_NAME, SPATIAL_METADATA_NAME,
+    ):
+        source = workspace / name
+        if source.is_file():
+            shutil.copy2(source, staging / name)
     runtime_manifest = dict(manifest)
     runtime_manifest["source_csv_path"] = "source_roads.csv"
     runtime_manifest["lifecycle_state"] = PackageLifecycleState.REGISTERED.value
@@ -840,6 +906,15 @@ def _copy_candidate_version(workspace: Path, staging: Path, preview: ActivationP
         activated_at=_utc_timestamp(),
         row_count=len(canonical),
     )
+    if (staging / SPATIAL_ARTIFACT_NAME).is_file():
+        spatial = load_spatial_artifact(staging)
+        spatial_metadata = _read_json(staging / SPATIAL_METADATA_NAME, "Spatial metadata")
+        record.update({
+            "spatial_artifact_path": f"versions/{preview.candidate_version}/{SPATIAL_ARTIFACT_NAME}",
+            "spatial_checksum": compute_source_checksum(staging / SPATIAL_ARTIFACT_NAME),
+            "spatial_feature_count": len(spatial.get("features", [])),
+            "spatial_provenance": spatial_metadata,
+        })
     _write_json_atomic(staging / "version.json", record)
     return record
 

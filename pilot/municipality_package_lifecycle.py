@@ -30,6 +30,14 @@ from pilot.onboarding_manifest_contract import (
     validate_manifest_contract,
 )
 from pilot.source_provenance import compute_source_checksum
+from pilot.municipality_spatial import (
+    SPATIAL_ARTIFACT_NAME,
+    SPATIAL_INPUT_NAME,
+    SPATIAL_METADATA_NAME,
+    SPATIAL_REVIEW_NAME,
+    SPATIAL_SOURCE_NAME,
+    validate_spatial_workspace,
+)
 
 
 MANIFEST_NAME = "manifest.json"
@@ -246,6 +254,14 @@ def compute_readiness_fingerprint(package_path: str | Path) -> str:
     source_checksum = compute_source_checksum(_source_path(package, document))
     snapshot = {field: document.get(field) for field in _READINESS_FIELDS}
     snapshot["actual_source_checksum"] = source_checksum
+    snapshot["spatial_artifacts"] = {
+        name: compute_source_checksum(package / name)
+        for name in (
+            SPATIAL_INPUT_NAME, SPATIAL_SOURCE_NAME, SPATIAL_ARTIFACT_NAME,
+            SPATIAL_METADATA_NAME, SPATIAL_REVIEW_NAME,
+        )
+        if (package / name).is_file()
+    }
     encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
@@ -370,6 +386,19 @@ def _evaluate(package: Path, document: Mapping[str, Any]) -> RealImportInspectio
                 ))
         except ValueError as exc:
             issues.append(PackageIssue("blocking", "canonical_review_path", str(exc)))
+
+    spatial_review_path = package / SPATIAL_REVIEW_NAME
+    if (package / SPATIAL_INPUT_NAME).is_file() and spatial_review_path.is_file():
+        try:
+            spatial_review = json.loads(spatial_review_path.read_text(encoding="utf-8"))
+            for issue in spatial_review.get("issues", []):
+                issues.append(PackageIssue(
+                    str(issue.get("severity", "blocking")),
+                    f"spatial.{issue.get('field', 'geometry')}",
+                    str(issue.get("message", "Spatial validation failed.")),
+                ))
+        except (OSError, json.JSONDecodeError, TypeError) as exc:
+            issues.append(PackageIssue("blocking", "spatial_review", str(exc)))
 
     if not any(issue.blocking for issue in issues):
         try:
@@ -566,6 +595,25 @@ def validate_real_import_package(package_path: str | Path) -> RealImportInspecti
         expected_data_status=inspection.config.normalized_data_status,
         municipality_slug=inspection.config.slug,
     )
+    spatial_review = validate_spatial_workspace(package, canonical_path)
+    if spatial_review is not None and spatial_review.blocking_issues:
+        _invalidate_document(document)
+        _write_manifest(manifest_path, document)
+        failed = _evaluate(package, document)
+        _write_validation_summary(failed)
+        _write_invalidated_registration_packet(package, document)
+        _update_metadata(
+            package,
+            state=PackageLifecycleState.VALIDATION_REQUIRED,
+            validation_result="FAIL",
+            road_count=failed.source_rows,
+        )
+        append_package_event(
+            package, "spatial validation failed",
+            PackageLifecycleState.VALIDATION_REQUIRED,
+            f"{len(spatial_review.blocking_issues)} blocking spatial issue(s).",
+        )
+        return failed
     document["lifecycle_state"] = PackageLifecycleState.VALIDATED.value
     document["canonical_checksum"] = compute_source_checksum(canonical_path)
     document.pop("validated_fingerprint", None)
