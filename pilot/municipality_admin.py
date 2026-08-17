@@ -1,4 +1,4 @@
-"""Operator helpers for generated demo and municipality import packages."""
+﻿"""Operator helpers for generated demo and municipality import packages."""
 
 from __future__ import annotations
 
@@ -932,7 +932,7 @@ def _generated_portfolio_entry(
                 generated_date=_generated_date(manifest, metadata),
                 permanent=False,
                 archived=False,
-                readiness_state=f"Real Import — {inspection.lifecycle_state.value}",
+                readiness_state=f"Real Import â€” {inspection.lifecycle_state.value}",
                 validation_summary=validation,
                 package_path=directory,
                 manifest_path=manifest,
@@ -975,7 +975,7 @@ def _generated_portfolio_entry(
         elif illustrative_demo and config.normalized_data_status == "illustrative":
             readiness = "Generated Illustrative Demo"
         else:
-            readiness = "Real Import — Validation Required"
+            readiness = "Real Import â€” Validation Required"
         cached_count = metadata.get("road_count")
         road_count = (
             cached_count
@@ -1059,15 +1059,31 @@ def build_municipality_portfolio(
     """Build portfolio metadata without loading or enriching every inventory."""
 
     entries = _permanent_portfolio_entries()
+    permanent_slugs = {entry.slug for entry in entries if entry.permanent}
+
     roots = [(generated_root, False)]
     if include_archived:
         roots.append((archived_root, True))
+
     for root, archived in roots:
         if not root.is_dir():
             continue
         for directory in sorted(root.iterdir()):
             if directory.is_dir():
-                entries.append(_generated_portfolio_entry(directory, archived=archived))
+                generated_entry = _generated_portfolio_entry(
+                    directory,
+                    archived=archived,
+                )
+
+                if (
+                    not archived
+                    and generated_entry.package_type == "real_import"
+                    and generated_entry.slug in permanent_slugs
+                ):
+                    continue
+
+                entries.append(generated_entry)
+
     return tuple(sorted(entries, key=lambda item: (item.formal_name.lower(), item.slug)))
 
 
@@ -1193,3 +1209,4 @@ def clone_illustrative_demo(
         generated_root=generated_root,
     )
     return create_illustrative_demo_package(review, generated_root=generated_root)
+
