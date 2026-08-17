@@ -1,4 +1,4 @@
-"""Registered municipality configurations and active selection."""
+﻿"""Registered municipality configurations and active selection."""
 
 from __future__ import annotations
 
@@ -93,16 +93,13 @@ ONBOARDING_DEMO_COLUMN_MAPPING = dict(
     ONBOARDING_DEMO_MUNICIPALITY.source_column_mapping or {}
 )
 
-BUILTIN_MUNICIPALITIES = {
-    JACKSON_MUNICIPALITY.slug: JACKSON_MUNICIPALITY,
-    DEMO_CITY_MUNICIPALITY.slug: DEMO_CITY_MUNICIPALITY,
-    DEMO_ROAD_COMMISSION_MUNICIPALITY.slug: DEMO_ROAD_COMMISSION_MUNICIPALITY,
-    ONBOARDING_DEMO_MUNICIPALITY.slug: ONBOARDING_DEMO_MUNICIPALITY,
-}
-# Compatibility mapping: populated with built-ins plus validated persistent
-# registrations below. Existing imports continue to use the same object.
+# Legacy illustrative demo configurations remain defined above for compatibility,
+# but are no longer exposed in the active municipality registry.
+BUILTIN_MUNICIPALITIES = {}
+
+# Compatibility mapping: populated with validated persistent registrations below.
 MUNICIPALITIES = dict(BUILTIN_MUNICIPALITIES)
-DEFAULT_MUNICIPALITY_SLUG = JACKSON_MUNICIPALITY.slug
+DEFAULT_MUNICIPALITY_SLUG = "spring_arbor"
 
 
 def validate_municipality_registry(
@@ -243,3 +240,4 @@ def is_active_municipality_pilot_mode(
     selected = config or ACTIVE_MUNICIPALITY
     configured_mode = os.getenv(PILOT_MODE_ENV_VAR, selected.pilot_mode)
     return configured_mode.strip().lower() == selected.pilot_mode
+
