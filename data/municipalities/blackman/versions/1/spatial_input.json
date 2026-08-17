@@ -1,0 +1,20 @@
+{
+  "acquired_date": "2026-08-16",
+  "canonical_id_field": "segment_id",
+  "declared_source_crs": "EPSG:4326",
+  "format": "GeoJSON",
+  "provenance_confirmed": true,
+  "source_checksum": "24414bc93f3729f49c2d87f8f83c9abe0fecaa94deba1313d10b1892f38c4801",
+  "source_files": [
+    {
+      "checksum": "24414bc93f3729f49c2d87f8f83c9abe0fecaa94deba1313d10b1892f38c4801",
+      "name": "source_roads.raw.geojson",
+      "size": 404430
+    }
+  ],
+  "source_id_field": "PAVENTRA_SEGMENT_ID",
+  "source_owner": "State of Michigan GIS Open Data",
+  "source_path": "source_roads.raw.geojson",
+  "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Blackman Charter Township rehearsal subset",
+  "target_crs": "EPSG:4326"
+}

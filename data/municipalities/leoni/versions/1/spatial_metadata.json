@@ -1,0 +1,25 @@
+{
+  "artifact_checksum": "0420ea383ed45eacdfecf89228dee2bd59ff9300e8eeca77eb28cd2cf7dd8571",
+  "artifact_path": "roads.geojson",
+  "bundle_checksum": null,
+  "feature_count": 1349,
+  "join_canonical_field": "segment_id",
+  "join_source_field": "PAVENTRA_SEGMENT_ID",
+  "match_coverage_percent": 100.0,
+  "provenance": {
+    "acquired_date": "2026-08-16",
+    "source_owner": "State of Michigan GIS Open Data",
+    "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Leoni Township rehearsal subset"
+  },
+  "source_checksum": "09bbf06265c86a52a9d1636a391e43a49036e55bd65e6707c6e37485688d75f3",
+  "source_crs": "EPSG:4326",
+  "source_files": [
+    {
+      "checksum": "09bbf06265c86a52a9d1636a391e43a49036e55bd65e6707c6e37485688d75f3",
+      "name": "source_roads.raw.geojson",
+      "size": 2554131
+    }
+  ],
+  "source_format": "GeoJSON",
+  "target_crs": "EPSG:4326"
+}

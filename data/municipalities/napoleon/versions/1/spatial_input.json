@@ -1,0 +1,20 @@
+{
+  "acquired_date": "2026-08-16",
+  "canonical_id_field": "segment_id",
+  "declared_source_crs": "EPSG:4326",
+  "format": "GeoJSON",
+  "provenance_confirmed": true,
+  "source_checksum": "9e83610c258a5cfe55689a587cc1242c954b7ed94482913c57130c558157b0ba",
+  "source_files": [
+    {
+      "checksum": "9e83610c258a5cfe55689a587cc1242c954b7ed94482913c57130c558157b0ba",
+      "name": "source_roads.raw.geojson",
+      "size": 878188
+    }
+  ],
+  "source_id_field": "PAVENTRA_SEGMENT_ID",
+  "source_owner": "State of Michigan GIS Open Data",
+  "source_path": "source_roads.raw.geojson",
+  "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Napoleon Township rehearsal subset",
+  "target_crs": "EPSG:4326"
+}

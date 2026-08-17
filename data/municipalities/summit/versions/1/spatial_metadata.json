@@ -1,0 +1,25 @@
+{
+  "artifact_checksum": "70999a863709db6860f4da4fadeb72731eba264507edaad5d95dd776d9eba78b",
+  "artifact_path": "roads.geojson",
+  "bundle_checksum": null,
+  "feature_count": 901,
+  "join_canonical_field": "segment_id",
+  "join_source_field": "PAVENTRA_SEGMENT_ID",
+  "match_coverage_percent": 100.0,
+  "provenance": {
+    "acquired_date": "2026-08-16",
+    "source_owner": "State of Michigan GIS Open Data",
+    "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Summit Township rehearsal subset"
+  },
+  "source_checksum": "511732c0b62f603d043fffed87ec41900f36103e9738bf31ac5fc45499b8263b",
+  "source_crs": "EPSG:4326",
+  "source_files": [
+    {
+      "checksum": "511732c0b62f603d043fffed87ec41900f36103e9738bf31ac5fc45499b8263b",
+      "name": "source_roads.raw.geojson",
+      "size": 1573773
+    }
+  ],
+  "source_format": "GeoJSON",
+  "target_crs": "EPSG:4326"
+}

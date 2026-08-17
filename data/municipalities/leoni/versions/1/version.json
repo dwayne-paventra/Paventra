@@ -1,0 +1,92 @@
+{
+  "data_version": 1,
+  "manifest_path": "versions/1/manifest.json",
+  "canonical_inventory_path": "versions/1/canonical_inventory.csv",
+  "created_at_utc": "2026-08-17T02:03:35+00:00",
+  "activated_at_utc": "2026-08-17T02:03:35+00:00",
+  "source_checksum": "a03be820d54b1d240cdaede42faafd8be80c2a00f801e0d22ecbe2f0bc0b0feb",
+  "canonical_checksum": "b03e26dbf570ae0682f6faba62d230b414f1c0a5c109f5aa5b331af1f1cdcef7",
+  "readiness_fingerprint": "5e1027a1791ef52fb67f7713da79e5766138f57ff17cc183592fd8cbee986ed7",
+  "configuration_snapshot": {
+    "municipality_id": "leoni-michigan",
+    "slug": "leoni",
+    "state": "Michigan",
+    "entity_type": "township",
+    "formal_name": "Leoni Township",
+    "short_name": "Leoni",
+    "map_center": [
+      42.2627239777255,
+      -84.30942994783251
+    ],
+    "map_zoom": 12,
+    "inventory_adapter": "mapped_csv",
+    "scenario_catalog_id": "standard",
+    "pilot_mode": "leoni_pilot",
+    "pilot_label": "Municipal Pilot",
+    "leadership_label": "township leadership",
+    "official_action_label": "official township determination",
+    "data_status": "provisional"
+  },
+  "mapping_snapshot": {
+    "road_id": "road_id",
+    "segment_id": "segment_id",
+    "road_name": "road_name",
+    "from_street": "from_street",
+    "to_street": "to_street",
+    "jurisdiction": "jurisdiction",
+    "latitude": "latitude",
+    "longitude": "longitude",
+    "road_length_miles": "road_length_miles",
+    "lanes": "lanes",
+    "surface_type": "surface_type",
+    "functional_class": "functional_class",
+    "pci": "pci",
+    "condition_date": "condition_date",
+    "traffic_level": "traffic_level",
+    "adt": "adt",
+    "age_years": "age_years",
+    "freeze_thaw": "freeze_thaw",
+    "recommended_treatment": "recommended_treatment",
+    "treatment_cost_per_lane_mile": "treatment_cost_per_lane_mile",
+    "data_status": "data_status",
+    "data_source": "data_source",
+    "data_updated_at": "data_updated_at"
+  },
+  "defaults_snapshot": {},
+  "data_status": "provisional",
+  "source_provenance": {
+    "owner": "Paventra rehearsal derived from State of Michigan GIS Open Data",
+    "acquired_date": "2026-08-16",
+    "reference": "State of Michigan GIS Open Data - All Roads (v17a), Leoni Township rehearsal subset",
+    "checksum": "a03be820d54b1d240cdaede42faafd8be80c2a00f801e0d22ecbe2f0bc0b0feb"
+  },
+  "row_count": 1349,
+  "spatial_artifact_path": "versions/1/roads.geojson",
+  "spatial_checksum": "0420ea383ed45eacdfecf89228dee2bd59ff9300e8eeca77eb28cd2cf7dd8571",
+  "spatial_feature_count": 1349,
+  "spatial_provenance": {
+    "artifact_checksum": "0420ea383ed45eacdfecf89228dee2bd59ff9300e8eeca77eb28cd2cf7dd8571",
+    "artifact_path": "roads.geojson",
+    "bundle_checksum": null,
+    "feature_count": 1349,
+    "join_canonical_field": "segment_id",
+    "join_source_field": "PAVENTRA_SEGMENT_ID",
+    "match_coverage_percent": 100.0,
+    "provenance": {
+      "acquired_date": "2026-08-16",
+      "source_owner": "State of Michigan GIS Open Data",
+      "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Leoni Township rehearsal subset"
+    },
+    "source_checksum": "09bbf06265c86a52a9d1636a391e43a49036e55bd65e6707c6e37485688d75f3",
+    "source_crs": "EPSG:4326",
+    "source_files": [
+      {
+        "checksum": "09bbf06265c86a52a9d1636a391e43a49036e55bd65e6707c6e37485688d75f3",
+        "name": "source_roads.raw.geojson",
+        "size": 2554131
+      }
+    ],
+    "source_format": "GeoJSON",
+    "target_crs": "EPSG:4326"
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "data_version": 1,
+  "manifest_path": "versions/1/manifest.json",
+  "canonical_inventory_path": "versions/1/canonical_inventory.csv",
+  "created_at_utc": "2026-08-17T02:01:41+00:00",
+  "activated_at_utc": "2026-08-17T02:01:41+00:00",
+  "source_checksum": "8b258b4bfbef0514cd33a15ee6c6175240904b4b0c272a0ea2ce89ad96a25597",
+  "canonical_checksum": "7dc68f6aa9667a8f31916594233c3e2e4f7950cc0e945173eed1d1c0b7999e3c",
+  "readiness_fingerprint": "852e6b8cfd11fa8c7457b6b4ffd6faaec02d036cdb81ddaf55c24c289540b1b0",
+  "configuration_snapshot": {
+    "municipality_id": "napoleon-michigan",
+    "slug": "napoleon",
+    "state": "Michigan",
+    "entity_type": "township",
+    "formal_name": "Napoleon Township",
+    "short_name": "Napoleon",
+    "map_center": [
+      42.18040070068406,
+      -84.27571856143669
+    ],
+    "map_zoom": 12,
+    "inventory_adapter": "mapped_csv",
+    "scenario_catalog_id": "standard",
+    "pilot_mode": "napoleon_pilot",
+    "pilot_label": "Municipal Pilot",
+    "leadership_label": "township leadership",
+    "official_action_label": "official township determination",
+    "data_status": "provisional"
+  },
+  "mapping_snapshot": {
+    "road_id": "road_id",
+    "segment_id": "segment_id",
+    "road_name": "road_name",
+    "from_street": "from_street",
+    "to_street": "to_street",
+    "jurisdiction": "jurisdiction",
+    "latitude": "latitude",
+    "longitude": "longitude",
+    "road_length_miles": "road_length_miles",
+    "lanes": "lanes",
+    "surface_type": "surface_type",
+    "functional_class": "functional_class",
+    "pci": "pci",
+    "condition_date": "condition_date",
+    "traffic_level": "traffic_level",
+    "adt": "adt",
+    "age_years": "age_years",
+    "freeze_thaw": "freeze_thaw",
+    "recommended_treatment": "recommended_treatment",
+    "treatment_cost_per_lane_mile": "treatment_cost_per_lane_mile",
+    "data_status": "data_status",
+    "data_source": "data_source",
+    "data_updated_at": "data_updated_at"
+  },
+  "defaults_snapshot": {},
+  "data_status": "provisional",
+  "source_provenance": {
+    "owner": "Paventra rehearsal derived from State of Michigan GIS Open Data",
+    "acquired_date": "2026-08-16",
+    "reference": "State of Michigan GIS Open Data - All Roads (v17a), Napoleon Township rehearsal subset",
+    "checksum": "8b258b4bfbef0514cd33a15ee6c6175240904b4b0c272a0ea2ce89ad96a25597"
+  },
+  "row_count": 445,
+  "spatial_artifact_path": "versions/1/roads.geojson",
+  "spatial_checksum": "53fe0462e2f26605c445097b7252bed0229d352f583aabfbecb8fdfc56c5589f",
+  "spatial_feature_count": 445,
+  "spatial_provenance": {
+    "artifact_checksum": "53fe0462e2f26605c445097b7252bed0229d352f583aabfbecb8fdfc56c5589f",
+    "artifact_path": "roads.geojson",
+    "bundle_checksum": null,
+    "feature_count": 445,
+    "join_canonical_field": "segment_id",
+    "join_source_field": "PAVENTRA_SEGMENT_ID",
+    "match_coverage_percent": 100.0,
+    "provenance": {
+      "acquired_date": "2026-08-16",
+      "source_owner": "State of Michigan GIS Open Data",
+      "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Napoleon Township rehearsal subset"
+    },
+    "source_checksum": "9e83610c258a5cfe55689a587cc1242c954b7ed94482913c57130c558157b0ba",
+    "source_crs": "EPSG:4326",
+    "source_files": [
+      {
+        "checksum": "9e83610c258a5cfe55689a587cc1242c954b7ed94482913c57130c558157b0ba",
+        "name": "source_roads.raw.geojson",
+        "size": 878188
+      }
+    ],
+    "source_format": "GeoJSON",
+    "target_crs": "EPSG:4326"
+  }
+}

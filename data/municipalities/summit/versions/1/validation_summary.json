@@ -1,0 +1,9 @@
+{
+  "validated_at_utc": "2026-08-17T01:22:49+00:00",
+  "state": "Validated",
+  "source_row_count": 901,
+  "canonical_row_count": 901,
+  "blocking_issue_count": 0,
+  "warning_count": 0,
+  "issues": []
+}

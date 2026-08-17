@@ -1,0 +1,25 @@
+{
+  "artifact_checksum": "581fda756b1eeeb5e3deb0b84a11b81b759969f143d9562fcdc77c797f9e649c",
+  "artifact_path": "roads.geojson",
+  "bundle_checksum": null,
+  "feature_count": 559,
+  "join_canonical_field": "segment_id",
+  "join_source_field": "PAVENTRA_SEGMENT_ID",
+  "match_coverage_percent": 100.0,
+  "provenance": {
+    "acquired_date": "2026-08-16",
+    "source_owner": "State of Michigan GIS Open Data",
+    "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Grass Lake Charter Township rehearsal subset"
+  },
+  "source_checksum": "9488a9c012888d12adc06d9d36fc106c0116270641a78d01cfb96c5295131f0a",
+  "source_crs": "EPSG:4326",
+  "source_files": [
+    {
+      "checksum": "9488a9c012888d12adc06d9d36fc106c0116270641a78d01cfb96c5295131f0a",
+      "name": "source_roads.raw.geojson",
+      "size": 1261146
+    }
+  ],
+  "source_format": "GeoJSON",
+  "target_crs": "EPSG:4326"
+}
