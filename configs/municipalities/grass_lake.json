@@ -1,0 +1,15 @@
+﻿{
+  "formal_name": "Grass Lake Charter Township",
+  "short_name": "Grass Lake",
+  "entity_type": "township",
+  "slug": "grass_lake",
+  "fmcd": 34500,
+  "segment_prefix": "GL",
+  "fetch_from_michigan": true,
+  "source_acquired_date": "2026-08-16",
+  "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Grass Lake Charter Township rehearsal subset",
+  "condition_date": "2026-08-16",
+  "leadership_label": "township leadership",
+  "official_action_label": "official township determination",
+  "map_zoom": 12
+}

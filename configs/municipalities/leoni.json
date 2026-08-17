@@ -1,0 +1,15 @@
+﻿{
+  "formal_name": "Leoni Township",
+  "short_name": "Leoni",
+  "entity_type": "township",
+  "slug": "leoni",
+  "fmcd": 46980,
+  "segment_prefix": "LEO",
+  "fetch_from_michigan": true,
+  "source_acquired_date": "2026-08-16",
+  "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Leoni Township rehearsal subset",
+  "condition_date": "2026-08-16",
+  "leadership_label": "township leadership",
+  "official_action_label": "official township determination",
+  "map_zoom": 12
+}

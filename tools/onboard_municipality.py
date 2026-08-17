@@ -5,7 +5,60 @@ import json
 from pathlib import Path
 
 import pandas as pd
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
+ALL_ROADS_QUERY_URL = (
+    "https://gisagocss.state.mi.us/arcgis/rest/services/OpenData/"
+    "michigan_geographic_framework/MapServer/20/query"
+)
+
+def fetch_municipality_geojson(fmcd: int) -> dict:
+    where = f"FMCDL = {fmcd} OR FMCDR = {fmcd}"
+
+    features = []
+    offset = 0
+    page_size = 1000
+
+    while True:
+        params = {
+            "where": where,
+            "outFields": "*",
+            "returnGeometry": "true",
+            "outSR": "4326",
+            "orderByFields": "OBJECTID",
+            "resultOffset": offset,
+            "resultRecordCount": page_size,
+            "f": "geojson",
+        }
+
+        url = ALL_ROADS_QUERY_URL + "?" + urlencode(params)
+
+        with urlopen(url, timeout=60) as response:
+            data = json.loads(response.read().decode("utf-8"))
+
+        if data.get("type") != "FeatureCollection":
+            raise ValueError(
+                f"Michigan GIS query did not return GeoJSON: {data}"
+            )
+
+        batch = data.get("features", [])
+        features.extend(batch)
+
+        if len(batch) < page_size:
+            break
+
+        offset += page_size
+
+    if not features:
+        raise ValueError(
+            f"No Michigan road features returned for FMCD {fmcd}."
+        )
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+    }
 from pilot.municipality_admin import (
     MunicipalityIdentity,
     save_real_import_draft,
@@ -55,10 +108,13 @@ def mean_center(features: list[dict]) -> tuple[float, float]:
 
 
 def prepare_municipality(config: dict) -> Path:
-    source_path = ROOT / config["source_geojson"]
-    geo = load_geojson(source_path)
-
     fmcd = int(config["fmcd"])
+
+    if config.get("fetch_from_michigan", False):
+        geo = fetch_municipality_geojson(fmcd)
+    else:
+        source_path = ROOT / config["source_geojson"]
+        geo = load_geojson(source_path)
 
     filtered = [
         feature
@@ -271,5 +327,9 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
 
 
