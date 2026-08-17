@@ -1,0 +1,15 @@
+﻿{
+  "formal_name": "Summit Township",
+  "short_name": "Summit",
+  "entity_type": "township",
+  "slug": "summit",
+  "fmcd": 77200,
+  "segment_prefix": "SUM",
+  "source_geojson": "generated/reference_roads/master/jackson_area_all_roads_v17a.geojson",
+  "source_acquired_date": "2026-08-16",
+  "source_reference": "State of Michigan GIS Open Data - All Roads (v17a), Summit Township rehearsal subset",
+  "condition_date": "2026-08-16",
+  "leadership_label": "township leadership",
+  "official_action_label": "official township determination",
+  "map_zoom": 12
+}
