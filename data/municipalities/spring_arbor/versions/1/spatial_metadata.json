@@ -1,0 +1,25 @@
+{
+  "artifact_checksum": "11b73b8f7243190ce037f2ffd16d7f70f089c4c867a69a026bce963f8808dc13",
+  "artifact_path": "roads.geojson",
+  "bundle_checksum": null,
+  "feature_count": 454,
+  "join_canonical_field": "segment_id",
+  "join_source_field": "PAVENTRA_SEGMENT_ID",
+  "match_coverage_percent": 100.0,
+  "provenance": {
+    "acquired_date": "2026-08-16",
+    "source_owner": "State of Michigan GIS Open Data",
+    "source_reference": "State of Michigan GIS Open Data ? All Roads (v17a), Spring Arbor rehearsal subset"
+  },
+  "source_checksum": "90fccbe1039658f8a9ffe539a7729507770296c98ed021da696eb5d84bc375ca",
+  "source_crs": "EPSG:4326",
+  "source_files": [
+    {
+      "checksum": "90fccbe1039658f8a9ffe539a7729507770296c98ed021da696eb5d84bc375ca",
+      "name": "source_roads.raw.geojson",
+      "size": 1987521
+    }
+  ],
+  "source_format": "GeoJSON",
+  "target_crs": "EPSG:4326"
+}

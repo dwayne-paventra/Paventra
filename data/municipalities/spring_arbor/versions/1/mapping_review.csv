@@ -1,0 +1,24 @@
+source_field,source_meaning,canonical_field,transformation,default_value,resolution,blocking
+road_id,Paventra rehearsal road identifier,road_id,trim/validate through canonical pipeline,,mapped,False
+segment_id,Paventra deterministic rehearsal segment identifier paired to GIS geometry,segment_id,trim/validate through canonical pipeline,,mapped,False
+road_name,Road name derived from Michigan GIS RDNAME,road_name,trim/validate through canonical pipeline,,mapped,False
+from_street,,from_street,trim/validate through canonical pipeline,,mapped,False
+to_street,,to_street,trim/validate through canonical pipeline,,mapped,False
+jurisdiction,,jurisdiction,trim/validate through canonical pipeline,,mapped,False
+latitude,,latitude,numeric coercion and range validation,,mapped,False
+longitude,,longitude,numeric coercion and range validation,,mapped,False
+road_length_miles,Road segment length converted from Michigan GIS LENGTH,road_length_miles,numeric coercion and range validation,,mapped,False
+lanes,,lanes,numeric coercion and range validation,,mapped,False
+surface_type,,surface_type,trim/validate through canonical pipeline,,mapped,False
+functional_class,,functional_class,trim/validate through canonical pipeline,,mapped,False
+pci,Provisional Paventra rehearsal assumption; not township-supplied PCI,pci,numeric coercion and range validation,,mapped,False
+condition_date,,condition_date,trim/validate through canonical pipeline,,mapped,False
+traffic_level,,traffic_level,trim/validate through canonical pipeline,,mapped,False
+adt,Provisional Paventra rehearsal assumption; not township-supplied traffic count,adt,numeric coercion and range validation,,mapped,False
+age_years,,age_years,numeric coercion and range validation,,mapped,False
+freeze_thaw,,freeze_thaw,trim/validate through canonical pipeline,,mapped,False
+recommended_treatment,Provisional Paventra rehearsal assumption,recommended_treatment,shared treatment-label normalization,,mapped,False
+treatment_cost_per_lane_mile,Provisional Paventra rehearsal assumption,treatment_cost_per_lane_mile,numeric coercion and range validation,,mapped,False
+data_status,,data_status,configured package data status,,mapped,False
+data_source,,data_source,trim/validate through canonical pipeline,,mapped,False
+data_updated_at,,data_updated_at,trim/validate through canonical pipeline,,mapped,False

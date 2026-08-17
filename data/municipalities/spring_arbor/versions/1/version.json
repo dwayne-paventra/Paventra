@@ -1,0 +1,92 @@
+{
+  "data_version": 1,
+  "manifest_path": "versions/1/manifest.json",
+  "canonical_inventory_path": "versions/1/canonical_inventory.csv",
+  "created_at_utc": "2026-08-17T00:19:17+00:00",
+  "activated_at_utc": "2026-08-17T00:19:17+00:00",
+  "source_checksum": "322abf310ff6b0d143928d225560bfb081451f872090ed31026d313ae47d0c1e",
+  "canonical_checksum": "4595f6d1214a3a2de963d69bbca767223eea494eceda2d9640a0a9d2e2449617",
+  "readiness_fingerprint": "50fcfe160ac6210ef5edff3829d115c142366f35d5e600f87d38e5187c950c1f",
+  "configuration_snapshot": {
+    "municipality_id": "spring_arbor-michigan",
+    "slug": "spring_arbor",
+    "state": "Michigan",
+    "entity_type": "township",
+    "formal_name": "Spring Arbor Township",
+    "short_name": "Spring Arbor",
+    "map_center": [
+      42.2147422611423,
+      -84.5332642294177
+    ],
+    "map_zoom": 12,
+    "inventory_adapter": "mapped_csv",
+    "scenario_catalog_id": "standard",
+    "pilot_mode": "spring_arbor_pilot",
+    "pilot_label": "Municipal Pilot",
+    "leadership_label": "township leadership",
+    "official_action_label": "official township determination",
+    "data_status": "provisional"
+  },
+  "mapping_snapshot": {
+    "road_id": "road_id",
+    "segment_id": "segment_id",
+    "road_name": "road_name",
+    "from_street": "from_street",
+    "to_street": "to_street",
+    "jurisdiction": "jurisdiction",
+    "latitude": "latitude",
+    "longitude": "longitude",
+    "road_length_miles": "road_length_miles",
+    "lanes": "lanes",
+    "surface_type": "surface_type",
+    "functional_class": "functional_class",
+    "pci": "pci",
+    "condition_date": "condition_date",
+    "traffic_level": "traffic_level",
+    "adt": "adt",
+    "age_years": "age_years",
+    "freeze_thaw": "freeze_thaw",
+    "recommended_treatment": "recommended_treatment",
+    "treatment_cost_per_lane_mile": "treatment_cost_per_lane_mile",
+    "data_status": "data_status",
+    "data_source": "data_source",
+    "data_updated_at": "data_updated_at"
+  },
+  "defaults_snapshot": {},
+  "data_status": "provisional",
+  "source_provenance": {
+    "owner": "Paventra rehearsal derived from State of Michigan GIS Open Data",
+    "acquired_date": "2026-08-16",
+    "reference": "State of Michigan GIS Open Data \u2014 All Roads (v17a), Spring Arbor rehearsal subset",
+    "checksum": "322abf310ff6b0d143928d225560bfb081451f872090ed31026d313ae47d0c1e"
+  },
+  "row_count": 454,
+  "spatial_artifact_path": "versions/1/roads.geojson",
+  "spatial_checksum": "11b73b8f7243190ce037f2ffd16d7f70f089c4c867a69a026bce963f8808dc13",
+  "spatial_feature_count": 454,
+  "spatial_provenance": {
+    "artifact_checksum": "11b73b8f7243190ce037f2ffd16d7f70f089c4c867a69a026bce963f8808dc13",
+    "artifact_path": "roads.geojson",
+    "bundle_checksum": null,
+    "feature_count": 454,
+    "join_canonical_field": "segment_id",
+    "join_source_field": "PAVENTRA_SEGMENT_ID",
+    "match_coverage_percent": 100.0,
+    "provenance": {
+      "acquired_date": "2026-08-16",
+      "source_owner": "State of Michigan GIS Open Data",
+      "source_reference": "State of Michigan GIS Open Data ? All Roads (v17a), Spring Arbor rehearsal subset"
+    },
+    "source_checksum": "90fccbe1039658f8a9ffe539a7729507770296c98ed021da696eb5d84bc375ca",
+    "source_crs": "EPSG:4326",
+    "source_files": [
+      {
+        "checksum": "90fccbe1039658f8a9ffe539a7729507770296c98ed021da696eb5d84bc375ca",
+        "name": "source_roads.raw.geojson",
+        "size": 1987521
+      }
+    ],
+    "source_format": "GeoJSON",
+    "target_crs": "EPSG:4326"
+  }
+}
